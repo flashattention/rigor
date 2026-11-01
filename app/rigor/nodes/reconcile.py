@@ -45,6 +45,7 @@ DELETE = "[삭제]"
 MAX_CARDS = 8
 _NUM = re.compile(r"\s*\d+(?:\.\d+)?\s*(?:%|분|초|시간|배|ms|x|건|명|만|k)?\s*", re.I)
 
+# KEEP_AS_IS는 이력서 문장을 막지 않을 뿐, 그 claim을 판정 근거에는 넣지 않는다 (ADR-0017).
 OPTIONS = {
     Mismatch.MISSING_IN_CODE: [
         ReconcileChoice.REVISE_TO_FACT,
@@ -67,6 +68,7 @@ OPTIONS = {
     ],
     Mismatch.AI_ASSISTED_UNEXPLAINED: [ReconcileChoice.REVISE_TO_FACT, ReconcileChoice.LATER],
 }
+# 이 표에 없는 (유형, 결과) 조합은 불일치로 다루지 않는다.
 _MISMATCH = {
     (ClaimType.TECH, ClaimResult.NOT_FOUND): Mismatch.MISSING_IN_CODE,
     (ClaimType.FEATURE, ClaimResult.NOT_FOUND): Mismatch.MISSING_IN_CODE,
@@ -109,6 +111,7 @@ def _areas_text(contribution: ContributionAnalysis | None) -> str:
 def suggest_revision(
     claim: Claim, mismatch: Mismatch, contribution: ContributionAnalysis | None
 ) -> str:
+    """불일치 유형별 템플릿으로 고칠 문장을 만든다. 남길 내용이 없으면 DELETE를 돌려준다."""
     if mismatch is Mismatch.METRIC_UNSUPPORTED:
         stripped = _NUM.sub(" ", claim.text).strip()
         return stripped if stripped and stripped != claim.text else DELETE
@@ -137,6 +140,7 @@ def _without_listed_skills(text: str) -> str | None:
 
 
 def find_mismatches(profile: Profile, audits: dict[int, RepoAudit]) -> list[ReconcileItem]:
+    """저장소별 claim 검사 중 _MISMATCH에 해당하는 것을 수정 제안과 함께 모은다."""
     facts = {f.id: f for f in profile.facts}
     claims = {c.id: c for f in profile.facts for c in f.claims}
     items = []
@@ -172,6 +176,11 @@ def reconcile(
     choose: ReconcileChooser = default_choice,
     can_explain: ExplainChooser = lambda _f: True,
 ) -> ReconcileOutcome:
+    """D1·D2: 불일치마다 선택을 받아 판정 근거용 프로필을 새로 만든다.
+
+    revise_to_fact만 문장을 고쳐 남기고(DELETE면 제거), 다른 선택은 모두 claim을 근거에서 뺀다.
+    claim이 고쳐지거나 빠진 confirmed fact는 revised가 된다.
+    """
     items = find_mismatches(profile, audits)
     decisions: list[ReconciliationDecision] = []
     drop: set[str] = set()
@@ -299,6 +308,10 @@ def card_targets(
 def interview_cards(
     client: LLMClient, profile: Profile, audits: dict[int, RepoAudit]
 ) -> tuple[list[InterviewCard], list[str]]:
+    """D3: card_targets의 claim마다 LLM이 질문과 답변 요점을 쓴다. 대상이 없으면 호출하지 않는다.
+
+    근거 위치는 규칙이 붙이고, 대상 밖 claim_id의 카드는 버린다.
+    """
     targets = card_targets(profile, audits)
     if not targets:
         return [], []

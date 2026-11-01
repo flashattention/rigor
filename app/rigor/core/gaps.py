@@ -37,6 +37,10 @@ def req_cite(rid: str, text: str | None = None) -> Citation:
 def classify_gaps(
     job: JobPosting, verdicts: list[RequirementVerdict], audits: dict[int, RepoAudit]
 ) -> list[Gap]:
+    """met이 아닌 요건을 갭으로 분류한다. 보호 속성 요건은 제외한다.
+
+    unknown 결격은 갭으로 만들지 않고 질문으로 돌린다 (rubric.md [B3]).
+    """
     core = core_competencies(job)
     status = {v.requirement_id: v for v in verdicts}
     repo_deps = {d for a in audits.values() for d in a.signals.dependencies}
@@ -95,6 +99,7 @@ def classify_gaps(
 def weaknesses(
     profile: Profile, audits: dict[int, RepoAudit], judgements: list[RepoJudgement]
 ) -> list[Weakness]:
+    """서류 약점 W1·W2·W3·W5·W6을 찾는다. profile은 정합 전 프로필을 넘겨야 한다."""
     out = []
     # 정합 전 프로필 기준 (근거 없는 수치를 지운 뒤에 "수치가 없다"고 하면 W2와 모순된다)
     projects = [f for f in profile.evidence_facts() if f.category is FactCategory.PROJECT]
@@ -112,6 +117,7 @@ def weaknesses(
             )
         )
     checks = [c for a in audits.values() for c in a.claim_checks]
+    # 규칙 검사가 남긴 action 문구로 수치 claim을 가린다. 문구가 바뀌면 W2가 W5로 넘어간다.
     unsupported_metric = [
         c for c in checks if c.result is ClaimResult.NOT_FOUND and "수치" in (c.action or "")
     ]
@@ -237,6 +243,7 @@ def suggest_redirect(
 def alternatives(
     job: JobPosting, grade: Grade, gi: GradeInputs, redirect: Redirect | None
 ) -> list[Alternative]:
+    """비추천에만 대안 경로를 낸다. 비추천에는 대안을 반드시 붙인다 (제품 원칙)."""
     if grade is not Grade.NOT_RECOMMENDED:
         return []
     out = []
@@ -270,6 +277,7 @@ def alternatives(
 
 
 def questions(job: JobPosting, verdicts: list[RequirementVerdict]) -> list[str]:
+    """unknown 판정을 사용자에게 물을 질문으로 바꾼다. 근거가 없으면 지어내지 않고 묻는다."""
     return [
         f"'{job.requirement(v.requirement_id).text}' 관련 경험이 있다면 알려 주세요 (근거가 없어 판단하지 않았습니다)"
         for v in verdicts

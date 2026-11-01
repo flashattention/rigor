@@ -124,6 +124,7 @@ def _normalize_token(raw: str) -> str | None:
 
 
 def _parse_date(raw: str | None) -> date | None:
+    """YYYY.MM, YYYY-MM-DD 등을 해석한다. 일이 없으면 1일로 두고, 해석할 수 없으면 None."""
     if not raw:
         return None
     m = _YM.match(raw)
@@ -195,6 +196,7 @@ def build_profile(
 
 
 def extract_profile(client: LLMClient, mask: MaskResult, profile_id: str) -> ExtractionResult:
+    """마스킹된 이력서 텍스트에서 fact·claim을 추출한다. 결과의 fact는 전부 unconfirmed다."""
     prompt = load_prompt(TASK)
     result = client.structured(
         TASK,

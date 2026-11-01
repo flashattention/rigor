@@ -49,6 +49,7 @@ class RepoFacts:
     user_commits: int = 0
 
 
+# 저장소 루트 URL만 받는다. /tree/main 같은 하위 경로는 malformed가 된다.
 _URL = re.compile(r"github\.com/([A-Za-z0-9-]+/[A-Za-z0-9._-]+?)(?:\.git)?/?$")
 
 
@@ -76,6 +77,7 @@ def check_links(profile: Profile, catalog: list[RepoFacts]) -> list[LinkCheck]:
 
 
 def apply_link_checks(profile: Profile, checks: list[LinkCheck]) -> Profile:
+    """카탈로그에서 찾은 링크에 repo_id를 채운다. 변경 없는 포크도 연결되어 E4의 X3에서 걸러진다."""
     by_fact = {c.fact_id: c for c in checks}
     facts = []
     for f in profile.facts:
@@ -96,6 +98,7 @@ def _fact_skills(f: Fact) -> set[str]:
 
 
 def score_candidate(f: Fact, repo: RepoFacts) -> RepoCandidate:
+    """이름·설명, 기술, 활동 기간 겹침의 가중합과 사람이 읽을 이유를 낸다."""
     fact_text = _tokens(" ".join([f.content, f.role or "", *[c.text for c in f.claims]]))
     repo_text = _tokens(
         " ".join([repo.meta.name.replace("-", " "), repo.meta.description, *repo.meta.topics])

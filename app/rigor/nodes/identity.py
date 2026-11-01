@@ -16,6 +16,7 @@ from pathlib import Path
 
 from rigor.schemas.profile import CommitIdentity
 
+# 분석 대상 저장소의 훅이 실행될 여지를 없앤다 (클론한 코드는 실행하지 않는다).
 _SAFE = ["-c", "core.hooksPath=/dev/null"]
 
 
@@ -36,6 +37,7 @@ class AliasCandidate:
 
 
 def collect_authors(repo_paths: Iterable[Path]) -> list[AuthorStat]:
+    """커밋을 (이름, 소문자 이메일)별로 합산해 많은 순으로 낸다. git 실패는 예외로 전파한다."""
     counts: Counter[tuple[str, str]] = Counter()
     for path in repo_paths:
         out = subprocess.run(
@@ -75,6 +77,7 @@ def propose_aliases(identity: CommitIdentity, authors: list[AuthorStat]) -> list
             and identity.github_login.lower() in a.email
         ):
             reasons.append("GitHub noreply 이메일")
+        # 정렬용 값이다. 점수로 귀속하지 않고, 사용자가 고른 이메일만 본인 커밋으로 센다.
         score = min(1.0, 0.5 * len(reasons))
         candidates.append(AliasCandidate(a.name, a.email, a.commits, score, tuple(reasons)))
     return sorted(candidates, key=lambda c: (-c.score, -c.commits))
@@ -85,6 +88,7 @@ def confirm_aliases(
     candidates: list[AliasCandidate],
     choose: Callable[[list[AliasCandidate]], list[str]],
 ) -> CommitIdentity:
+    """고른 이메일을 더하고 확인 완료로 표시한다. 후보 밖 이메일이면 ValueError."""
     chosen = {e.lower() for e in choose(candidates)}
     offered = {c.email for c in candidates}
     if not chosen <= offered:

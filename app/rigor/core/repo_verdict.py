@@ -14,7 +14,9 @@ from rigor.schemas.job import JobPosting, RequirementKind
 from rigor.schemas.repo import ExposureKind, RepoAudit, RepoVerdict
 from rigor.taxonomy import load_taxonomy
 
+# rubric.md §4.1의 기준값
 SHOWCASE_MIN_QUALITY = 0.65
+# 판정을 바꾸지 않는다. 무관한 저장소에 "다른 직무에는 쓸 수 있음" 메모를 붙일지만 정한다.
 DROP_BELOW_QUALITY = 0.3
 MAX_SCORE = 21  # Q1~Q10 각 2점 + Q11 1점
 _RESULT_FILES = re.compile(r"(^|/)(eval|evals|results?|benchmarks?)(/|\.|$)|benchmark", re.I)
@@ -36,11 +38,13 @@ class RepoJudgement:
 
     @property
     def order_key(self) -> tuple[int, float]:
+        """대표 → 보완 → 제외 순, 같은 판정 안에서는 관련 요건 수 × 품질이 큰 순."""
         rank = {RepoVerdict.SHOWCASE: 0, RepoVerdict.IMPROVE: 1, RepoVerdict.DROP: 2}[self.verdict]
         return rank, -(len(self.relevant_requirements) * self.quality)
 
 
 def quality_scores(audit: RepoAudit, snap: RepoSnapshot) -> dict[str, float]:
+    """rubric.md §4의 Q1~Q11. Q5는 테스트 파일 수, Q8은 소스 최상위 디렉터리 수로 근사한다."""
     s = audit.signals
     sec = set(s.readme.sections)
     has_results_files = any(_RESULT_FILES.search(p) for p in snap.paths)
@@ -88,6 +92,10 @@ def relevant_requirements(
 def judge_repo(
     audit: RepoAudit, snap: RepoSnapshot, job: JobPosting, cited_requirements: set[str]
 ) -> RepoJudgement:
+    """rubric.md §4.1에 따라 판정한다. blockers가 있으면 최대 improve다.
+
+    X3(커밋은 있는데 본인 커밋 0)이면 다른 조건과 무관하게 drop이고 blockers는 비운다.
+    """
     scores = quality_scores(audit, snap)
     quality = round(sum(scores.values()) / MAX_SCORE, 3)
     relevant = relevant_requirements(audit, job, cited_requirements)

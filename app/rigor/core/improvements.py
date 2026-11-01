@@ -44,6 +44,10 @@ def _item(
 
 
 def improvements_for(audit: RepoAudit, j: RepoJudgement) -> list[Improvement]:
+    """판정과 신호로 개선 항목을 만든다. drop 판정이면 빈 목록이다.
+
+    관련 요건이 없으면 저장소 요약 근거를 인용한다.
+    """
     if j.verdict is RepoVerdict.DROP:
         return []
     rid = audit.repo_id
@@ -81,6 +85,7 @@ def improvements_for(audit: RepoAudit, j: RepoJudgement) -> list[Improvement]:
                 cites,
             )
         )
+    # 3은 repo_verdict의 Q5 만점 기준과 같다
     if not s.tests.exists or s.tests.file_count < 3:
         out.append(
             _item(
@@ -142,6 +147,7 @@ def improvements_for(audit: RepoAudit, j: RepoJudgement) -> list[Improvement]:
 
 
 def _resolve(path: str, signals: dict[str, Any], exposure: dict[str, int]) -> Any:
+    """점 경로로 신호 값을 찾는다. 없는 경로는 None, exposure.*는 노출 건수이고 없으면 0이다."""
     if path.startswith("exposure."):
         return exposure.get(path.split(".", 1)[1], 0)
     node: Any = signals

@@ -23,6 +23,7 @@ DEFAULT_BUDGET_DAYS = 21.0
 # 관례값: 한 번에 실행할 수 있는 분량. 실제 리포트에서 26개 항목이 나와 읽을 수 없었다
 MAX_ITEMS_PER_REPO = 3
 MAX_ROADMAP_ITEMS = 8
+# 신규 프로젝트의 완료 기준으로 허용하는 신호 경로. 재감사로 자동 확인되는 것만 둔다.
 NEW_PROJECT_PATHS = {
     "readme.sections",
     "tests.file_count",
@@ -30,6 +31,7 @@ NEW_PROJECT_PATHS = {
     "deploy.homepage_url",
     "dependencies",
 }
+# 갭 심각도와 개선 효과를 한 목록에서 정렬하기 위한 서열 값이다.
 _SEVERITY_W = {Severity.CRITICAL: 3.0, Severity.MAJOR: 2.0, Severity.MINOR: 1.0}
 _IMPACT_W = {Impact.HIGH: 3.0, Impact.MED: 2.0, Impact.LOW: 1.0}
 
@@ -66,6 +68,10 @@ def budget_days(profile: Profile, today: date | None = None) -> float:
 def plan_new_projects(
     client: LLMClient, job: JobPosting, gaps: list[Gap], budget: float
 ) -> tuple[list[RoadmapItem], list[str]]:
+    """치명·주요 missing_fact 갭으로 신규 프로젝트를 제안받는다. 대상 갭이 없으면 LLM을 부르지 않는다.
+
+    대상 밖 요건 인용과 허용 경로 밖 완료 기준은 지운다. 둘 중 하나라도 남지 않으면 항목을 버린다.
+    """
     targets = [
         g
         for g in gaps
@@ -117,6 +123,11 @@ def assemble_roadmap(
     gaps: list[Gap],
     budget: float,
 ) -> Roadmap:
+    """개선 항목과 신규 프로젝트를 효과 순, 같으면 공수 순으로 상한까지 골라 priority를 매긴다.
+
+    요건 인용이 없는 개선 항목은 넣지 않는다. 기간을 넘기는 항목은 건너뛰고 다음 항목을 계속 본다.
+    new_projects는 addresses_requirements가 비어 있으면 안 된다 (plan_new_projects가 보장).
+    """
     severity = {g.requirement_id: g.severity for g in gaps}
     scored: list[tuple[float, float, RoadmapItem]] = []
     for repo_id, imps in improvements.items():

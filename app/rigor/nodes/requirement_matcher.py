@@ -29,6 +29,7 @@ _DEGREE_RANK = {
     Degree.MASTER: 3,
     Degree.PHD: 4,
 }
+# 위에서부터 먼저 맞는 항목을 요구 학위로 본다.
 _REQUIRED_DEGREE = [
     (re.compile(r"박사|ph\.?d|doctor", re.I), Degree.PHD),
     (re.compile(r"석사|master|m\.s\.", re.I), Degree.MASTER),
@@ -54,6 +55,8 @@ class VerdictsDraft(DraftModel):
 
 @dataclass
 class EvidenceBundle:
+    """LLM에 줄 근거 텍스트와, 출력 인용을 대조할 유효 id 모음."""
+
     text: str
     fact_ids: set[str]
     repo_evidence: dict[str, RepoEvidence]
@@ -68,6 +71,7 @@ class MatchResult:
 
 
 def summary_evidence(audit: RepoAudit) -> RepoEvidence:
+    """결정론 신호를 요약한 저장소 근거. id 형식 e_<repo_id>_summary는 다른 모듈도 인용에 쓴다."""
     s = audit.signals
     c = audit.contribution
     parts = [
@@ -85,6 +89,10 @@ def summary_evidence(audit: RepoAudit) -> RepoEvidence:
 
 
 def build_evidence(profile: Profile, audits: dict[int, RepoAudit]) -> EvidenceBundle:
+    """판정 근거 fact와, 그 fact에 연결된 저장소의 근거를 모은다.
+
+    저장소 근거는 요약과 supported claim의 인용만 넣는다. 미연결 저장소는 LLM에 보이지 않는다.
+    """
     lines: list[str] = []
     fact_repo: dict[str, int] = {}
     repo_ev: dict[str, RepoEvidence] = {}
@@ -129,6 +137,10 @@ def _kind(ref: str) -> str | None:
 
 
 def _degree_verdict(req_text: str, profile: Profile) -> RequirementVerdict | None:
+    """요구 학위와 확인된 최고 학위를 비교한다. requirement_id는 호출자가 채운다.
+
+    요구 학위를 못 찾거나 학력 fact가 없으면 None이고, 이때는 LLM 판정을 쓴다.
+    """
     need = next((d for pattern, d in _REQUIRED_DEGREE if pattern.search(req_text)), None)
     edu = [
         f
@@ -150,6 +162,7 @@ def _degree_verdict(req_text: str, profile: Profile) -> RequirementVerdict | Non
 def match_requirements(
     client: LLMClient, job: JobPosting, profile: Profile, audits: dict[int, RepoAudit]
 ) -> tuple[MatchResult, EvidenceBundle]:
+    """E1: 요건마다 판정을 하나씩 낸다. 보호 속성 요건은 LLM에 보내지 않고 unknown으로 둔다."""
     bundle = build_evidence(profile, audits)
     prompt = load_prompt(TASK)
     req_lines = [
@@ -225,6 +238,7 @@ def match_requirements(
 def cited_requirements_by_repo(
     verdicts: list[RequirementVerdict], bundle: EvidenceBundle
 ) -> dict[int, set[str]]:
+    """met·partial 판정이 인용한 근거를 저장소별 요건 id로 묶는다 (E4의 관련성 입력)."""
     out: dict[int, set[str]] = {}
     for v in verdicts:
         if v.status not in (VerdictStatus.MET, VerdictStatus.PARTIAL):

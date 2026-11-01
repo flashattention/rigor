@@ -33,6 +33,8 @@ from rigor.taxonomy import load_taxonomy
 
 TASK = "jd_parse"
 
+# knockout 문장에 있어야 할 유형별 키워드. 없으면 LLM의 결격 판단을 믿지 않고 required로 낮춘다.
+# OTHER는 어떤 문장이든 통과한다.
 _KNOCKOUT_KEYWORDS = {
     KnockoutType.DEGREE: r"학사|석사|박사|학위|전공|degree|bachelor|master|ph\.?d",
     KnockoutType.CERTIFICATION: r"자격증|자격|기사|certif|license",
@@ -162,6 +164,7 @@ def build_job(
 def parse_jd(
     client: LLMClient, text: str, job_id: str, owner_user_id: str | None = None
 ) -> JDParseResult:
+    """공고 원문을 LLM으로 구조화하고 build_job으로 검증한다. LLM 오류는 그대로 전파한다."""
     prompt = load_prompt(TASK)
     result = client.structured(
         TASK,

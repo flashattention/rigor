@@ -28,6 +28,7 @@ READABLE_EXT = (
     ".csv", ".json", ".toml", ".yaml", ".yml", ".cfg", ".ini", ".html", ".vue", ".sql",
 )  # fmt: skip
 
+# 스냅샷에 본문이 없는 파일을 필요할 때 읽어 온다. 못 읽으면 None.
 Reader = Callable[[str], str | None]
 
 SUBMIT = "submit_verdict"
@@ -92,6 +93,8 @@ TOOLS: tuple[ToolSpec, ...] = (
 
 
 class RepoWorkspace:
+    """저장소 하나의 도구 실행 상태. 본문은 메모리에 올릴 때 가리고, 연 파일을 opened에 남긴다."""
+
     def __init__(
         self,
         snap: RepoSnapshot,
@@ -115,6 +118,7 @@ class RepoWorkspace:
         return text
 
     def _load(self, path: str) -> str | None:
+        """메모리에 없으면 reader로 읽어 가린 뒤 보관한다. 못 읽으면 None."""
         if path not in self._files and self.reader is not None:
             body = self.reader(path)
             if body is not None:
@@ -131,6 +135,7 @@ class RepoWorkspace:
         return all(p in self._files for p in self.readable_paths)
 
     def file_text(self, path: str) -> str | None:
+        """가려진 본문. reader를 부르지 않으므로 메모리에 올라온 파일만 돌려준다."""
         return self._files.get(path)
 
     def tree(self, prefix: str = "") -> str:
@@ -140,6 +145,10 @@ class RepoWorkspace:
         return "\n".join(shown) + more if shown else "(파일 없음)"
 
     def read_file(self, path: str, start: int = 1, end: int | None = None) -> str:
+        """줄 번호를 붙여 MAX_READ_LINES줄까지 읽고 opened에 파일 단위로 남긴다.
+
+        실패는 예외가 아니라 오류 문자열로 돌려준다 (LLM이 관찰로 받는다).
+        """
         if path not in self._paths:
             return f"오류: 저장소에 없는 경로입니다: {path}"
         text = self._load(path)
@@ -154,6 +163,7 @@ class RepoWorkspace:
         return f"{path}\n{body}{note}"
 
     def grep(self, query: str, prefix: str = "") -> str:
+        """메모리에 올라온 파일만 찾고, 전체 중 몇 개를 찾았는지 출력 첫 줄에 밝힌다."""
         needle = query.casefold()
         if not needle:
             return "오류: 검색어가 비어 있습니다"
@@ -172,6 +182,7 @@ class RepoWorkspace:
         return "\n".join([scope, *hits]) if hits else f"{scope}\n(결과 없음)"
 
     def git_log(self, path: str | None = None) -> str:
+        """MAX_LOG_ENTRIES개까지 보여 준다. 작성자는 본인/타인으로만 표시한다."""
         commits = self.snap.commits
         if path:
             commits = [c for c in commits if any(ch.path == path for ch in c.changes)]

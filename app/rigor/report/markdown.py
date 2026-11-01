@@ -14,6 +14,8 @@ GRADE_LABEL = {
     Grade.GAP_FIRST: "갭 보완 후",
     Grade.NOT_RECOMMENDED: "비추천",
 }
+# 40%·60%와 render_markdown의 "0.5로 계산"은 core/grading.py의 기준값을 글로 옮긴 것이다.
+# 기준값을 바꾸면 함께 고친다.
 RULE_TEXT = {
     "G1": "결격 요건을 충족하지 않음",
     "G2": "필수 요건 충족률 40% 미만",
@@ -46,6 +48,7 @@ def _cites(cites: list[Citation]) -> str:
 
 
 def render_markdown(r: DiagnosisReport) -> str:
+    """진단 결과를 리포트 문자열로 만든다. LLM을 부르지 않는다."""
     d = r.diagnosis
     job = r.job
     out: list[str] = []

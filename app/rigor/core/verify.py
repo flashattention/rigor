@@ -57,6 +57,7 @@ def keep_cited(items: Iterable, index: EvidenceIndex, report: VerifyReport, labe
 
 
 def policy_check(texts: Iterable[str], identifiers: Iterable[str], report: VerifyReport) -> None:
+    """보호 속성 언급·식별 정보를 report에 경고로 남긴다. 문장을 고치거나 버리지는 않는다."""
     ids = [i for i in identifiers if i]
     for t in texts:
         if _PROTECTED_WORDS.search(t):

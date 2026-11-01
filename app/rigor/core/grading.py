@@ -21,6 +21,8 @@ _CREDIT = {VerdictStatus.MET: 1.0, VerdictStatus.PARTIAL: PARTIAL_WEIGHT}
 
 @dataclass(frozen=True)
 class GradeInputs:
+    """등급 규칙의 입력. 보호 속성 요건(legal_check=flag)을 뺀 값이다."""
+
     cov_req: float
     knockout_unmet: list[str]
     knockout_unknown: list[str]
@@ -30,6 +32,7 @@ class GradeInputs:
 
 
 def core_competencies(job: JobPosting) -> set[str]:
+    """주 직무의 핵심 역량. role_ids가 비면 빈 집합이라 G3·G5가 성립하지 않는다."""
     tax = load_taxonomy()
     out: set[str] = set()
     for role in job.role_ids[:1]:  # 공고의 주 직무 기준
@@ -49,6 +52,7 @@ def grade_inputs(
     status = {r.id: by_id.get(r.id, VerdictStatus.UNKNOWN) for r in usable}
     cov = sum(_CREDIT.get(status[r.id], 0.0) for r in required) / len(required) if required else 1.0
     core_required = [r.id for r in required if core & set(r.competencies)]
+    # rubric.md §1: unknown은 등급 계산에서 unmet으로 본다 (결격 판정만 예외)
     critical = [
         rid for rid in core_required if status[rid] in (VerdictStatus.UNMET, VerdictStatus.UNKNOWN)
     ]
@@ -65,6 +69,7 @@ def grade_inputs(
 def compute_grade(
     job: JobPosting, verdicts: list[RequirementVerdict], showcase_requirements: set[str]
 ) -> tuple[Grade, GradeTrace, GradeInputs]:
+    """rubric.md §2의 규칙을 G1부터 적용한다. 먼저 맞는 규칙이 등급이므로 순서가 의미를 가진다."""
     gi = grade_inputs(job, verdicts, showcase_requirements)
     by_id = {v.requirement_id: v.status for v in verdicts}
     required = [

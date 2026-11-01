@@ -40,7 +40,10 @@ class AgentOutcome:
 def verify_claim(
     client: LLMClient, claim: Claim, ws: RepoWorkspace, budget: AgentBudget = AgentBudget()
 ) -> AgentOutcome:
-    """모델이 도구를 고르고, 코드가 실행해 결과를 돌려주는 루프."""
+    """모델이 도구를 고르고, 코드가 실행해 결과를 돌려주는 루프.
+
+    예산을 넘기거나 모델이 도구를 부르지 않으면 unverifiable로 끝난다. LLM 오류는 잡지 않는다.
+    """
 
     system = load_prompt(TASK).text
     messages = [AgentMessage("user", text=data_block("claim", claim.text))]
@@ -78,6 +81,7 @@ def verify_claim(
                 CheckedVerdict(ClaimResult.UNVERIFIABLE, "도구 호출 없음"), "no_tool_call"
             )
 
+        # 제출이 있으면 같은 턴의 다른 도구 호출은 실행하지 않는다
         for call in turn.tool_calls:
             if call.name == SUBMIT:
                 verdict = check_submission(ws, call.arguments)

@@ -35,6 +35,8 @@ class VerdictSubmission(DraftModel):
 
 @dataclass
 class CheckedVerdict:
+    """코드 검증을 마친 판정. downgraded는 제출한 판정이 unverifiable로 낮춰졌다는 뜻이다."""
+
     result: ClaimResult
     reason: str
     verified: list[CitationDraft] = field(default_factory=list)
@@ -47,6 +49,7 @@ def _squash(text: str) -> str:
 
 
 def citation_holds(ws: RepoWorkspace, c: CitationDraft) -> bool:
+    """연 파일의 해당 줄 ±LINE_TOLERANCE 안에 인용문이 있는지 본다. 공백·대소문자는 무시한다."""
     if c.path not in ws.opened:
         return False
     text = ws.file_text(c.path)
@@ -77,6 +80,7 @@ def check_submission(ws: RepoWorkspace, arguments: dict[str, Any]) -> CheckedVer
 def to_claim_check(
     claim: Claim, checked: CheckedVerdict, repo_id: int
 ) -> tuple[ClaimCheck, list[RepoEvidence]]:
+    """검증된 인용만 RepoEvidence로 옮겨 ClaimCheck를 만든다. rejected 인용은 남기지 않는다."""
     evidence = [
         RepoEvidence(
             id=f"e_{repo_id}_{claim.id}_{i}",
