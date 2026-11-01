@@ -12,7 +12,7 @@ import json
 import os
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from pydantic import Field
@@ -24,6 +24,7 @@ from evals.agent.dataset import (
     load_repo,
     load_split,
     transplant,
+    validate_claim,
     with_injection,
 )
 from rigor.agent.loop import AgentBudget, verify_claim
@@ -65,6 +66,8 @@ class CaseResult:
     steps: int = 0
     stop_reason: str = ""
     error: str = ""
+    reason: str = ""
+    citations: list[dict] = field(default_factory=list)  # 코드 검증을 통과한 인용 (실패 분석용)
 
 
 def _claim(case: ClaimCase) -> Claim:
@@ -166,6 +169,8 @@ def evaluate_case(
         steps=steps,
         stop_reason=stop,
         error=error,
+        reason=verdict.reason,
+        citations=[c.model_dump() for c in verdict.verified],
     )
 
 
@@ -211,11 +216,16 @@ def score(results: list[CaseResult]) -> dict:
 
 
 def build_cases(split: str) -> tuple[list[ClaimCase], dict[str, RepoSnapshot]]:
-    """작성한 주장에 B·E 사례를 더한다. validate_claim은 돌리지 않는다."""
+    """작성한 주장에 B·E 사례를 더한다. 검증은 check_cases가 한다."""
     repos, written = load_split(split)
     snaps = {r["full_name"]: load_repo(r) for r in repos}
     moved = transplant(written, snaps)
     return [*written, *moved, *injection_cases([*written, *moved])], snaps
+
+
+def check_cases(cases: list[ClaimCase], snaps: dict[str, RepoSnapshot]) -> list[str]:
+    """돈을 쓰기 전에 잘못 작성된 주장을 찾는다. E는 인젝션을 넣기 전 스냅샷으로 본다."""
+    return [p for c in cases for p in validate_claim(c, snaps[c.repo])]
 
 
 def main() -> int:
@@ -241,6 +251,13 @@ def main() -> int:
                 kept.append(c)
                 counts[c.type] += 1
         cases = kept
+    out = ROOT / "runs" / f"{args.split}_{args.profile}_{int(time.time())}.jsonl"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if problems := check_cases(cases, snaps):
+        # 문제 문장에 저장소 이름이 들어가므로 git 제외 폴더에만 쓴다
+        out.with_suffix(".problems.txt").write_text("\n".join(problems), encoding="utf-8")
+        print(f"중단: 주장 검증 문제 {len(problems)}건 ({out.with_suffix('.problems.txt')})")
+        return 1
     client = build_client(profile=args.profile, mode="live", max_usd=args.max_usd)
     results: list[CaseResult] = []
     stopped = False
@@ -248,17 +265,15 @@ def main() -> int:
         for case in cases:
             try:
                 results.append(evaluate_case(client, method, case, snaps[case.repo]))
+                # 실행이 도중에 끊겨도 이미 비용을 낸 결과는 남긴다
+                with out.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(asdict(results[-1]), ensure_ascii=False) + "\n")
             except Exception as exc:
                 print(f"중단: {type(exc).__name__} (사례 {len(results)}개까지 집계)")
                 stopped = True
                 break
         if stopped:
             break
-    out = ROOT / "runs" / f"{args.split}_{args.profile}_{int(time.time())}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(
-        json.dumps([asdict(r) for r in results], ensure_ascii=False, indent=2), encoding="utf-8"
-    )
     summary = {m: score([r for r in results if r.method == m]) for m in args.methods.split(",")}
     print(
         json.dumps(

@@ -1,5 +1,12 @@
 from evals.agent.dataset import ClaimCase
-from evals.agent.runner import CaseResult, SearchTerms, evaluate_case, run_rules, score
+from evals.agent.runner import (
+    CaseResult,
+    SearchTerms,
+    check_cases,
+    evaluate_case,
+    run_rules,
+    score,
+)
 
 from rigor.agent.verdict import VerdictSubmission
 from rigor.github_audit.snapshot import RepoMeta, RepoSnapshot
@@ -81,6 +88,23 @@ def test_keyword_method_reads_hits_and_checks_citations_in_code():
     fake = FakeAdapter().queue("claim_verify", [SearchTerms(terms=["sorted"]), forged])
     out = evaluate_case(client(fake), "keyword", TRUE, SNAP)
     assert out.result == "unverifiable" and out.downgraded
+
+
+def test_verified_citations_are_kept_for_failure_analysis():
+    good = VerdictSubmission(
+        result="supported",
+        reason="정렬 코드",
+        citations=[{"path": "src/rank.py", "line": 2, "quote": "sorted(xs"}],
+    )
+    fake = FakeAdapter().queue("claim_verify", [SearchTerms(terms=["sorted"]), good])
+    out = evaluate_case(client(fake), "keyword", TRUE, SNAP)
+    assert out.reason == "정렬 코드"
+    assert out.citations == [{"path": "src/rank.py", "line": 2, "quote": "sorted(xs"}]
+
+
+def test_badly_written_claims_are_found_before_spending_money():
+    wrong = ClaimCase(id="c2", repo="o/a", type="D", text="없는 기능", truth="supported")
+    assert any("c2" in p for p in check_cases([wrong], {"o/a": SNAP}))
 
 
 def test_agent_method_runs_the_loop_and_one_failure_does_not_stop_the_run():
