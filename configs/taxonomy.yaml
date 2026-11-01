@@ -1,0 +1,59 @@
+# docs/taxonomy.md v0.1의 설정판. 역할 가중치는 공고 빈도 분석으로 확정 예정 (taxonomy §5).
+version: "0.1"
+
+competencies:
+  C01: {name: llm_app, label: LLM 애플리케이션 개발}
+  C02: {name: agent_orch, label: 에이전트·워크플로 오케스트레이션}
+  C03: {name: retrieval, label: 검색·RAG}
+  C04: {name: eval_obs, label: 평가·관측}
+  C05: {name: ml_model, label: ML 모델링·학습}
+  C06: {name: mlops_serving, label: MLOps·서빙}
+  C07: {name: data_eng, label: 데이터 엔지니어링}
+  C08: {name: backend, label: 백엔드·API}
+  C09: {name: infra_cloud, label: 인프라·클라우드}
+  C10: {name: sw_quality, label: 소프트웨어 품질}
+  C11: {name: customer_delivery, label: 고객 문제 해결·현장 적용}
+  C12: {name: communication, label: 기술 커뮤니케이션}
+  C13: {name: security_privacy, label: 보안·개인정보}
+
+# 2 = 핵심(●●), 1 = 중요(●), 0.5 = 우대(○)
+roles:
+  agent_engineer: {label: Agent Engineer, weights: {C01: 2, C02: 2, C03: 1, C04: 2, C05: 0.5, C06: 0.5, C08: 1, C09: 0.5, C10: 1, C11: 0.5, C12: 1, C13: 1}}
+  fde: {label: Forward Deployed Engineer, weights: {C01: 1, C02: 1, C03: 0.5, C04: 1, C06: 0.5, C07: 1, C08: 1, C09: 1, C10: 1, C11: 2, C12: 2, C13: 1}}
+  ai_engineer: {label: AI Engineer, weights: {C01: 2, C02: 1, C03: 1, C04: 1, C05: 0.5, C06: 1, C07: 0.5, C08: 1, C09: 0.5, C10: 1, C11: 0.5, C12: 1, C13: 0.5}}
+  ml_engineer: {label: ML Engineer, weights: {C01: 0.5, C03: 0.5, C04: 1, C05: 2, C06: 1, C07: 1, C09: 0.5, C10: 1, C12: 1}}
+  mlops: {label: MLOps Engineer, weights: {C04: 1, C05: 1, C06: 2, C07: 1, C08: 1, C09: 2, C10: 1, C12: 0.5, C13: 1}}
+  data_engineer: {label: Data Engineer, weights: {C07: 2, C08: 1, C09: 1, C10: 1, C12: 0.5, C13: 0.5}}
+  backend: {label: Backend Engineer, weights: {C01: 0.5, C07: 0.5, C08: 2, C09: 1, C10: 2, C12: 0.5, C13: 1}}
+
+# 정규 이름: {aliases, competencies}. 매핑 없는 기술은 unmapped로 남겨 주기적으로 추가한다.
+skills:
+  python: {aliases: [파이썬], competencies: [C08]}
+  langgraph: {aliases: [랭그래프, LangGraph], competencies: [C02]}
+  langchain: {aliases: [랭체인, LangChain], competencies: [C01, C02]}
+  openai_api: {aliases: [OpenAI API, openai], competencies: [C01]}
+  anthropic_api: {aliases: [Claude API, anthropic], competencies: [C01]}
+  faiss: {aliases: [FAISS, faiss-cpu], competencies: [C03]}
+  pgvector: {aliases: [], competencies: [C03, C08]}
+  elasticsearch: {aliases: [엘라스틱서치], competencies: [C03]}
+  pytorch: {aliases: [torch, 파이토치, PyTorch], competencies: [C05]}
+  tensorflow: {aliases: [텐서플로], competencies: [C05]}
+  scikit_learn: {aliases: [sklearn, scikit-learn], competencies: [C05]}
+  lightgbm: {aliases: [LightGBM], competencies: [C05]}
+  surprise: {aliases: [scikit-surprise], competencies: [C05]}
+  pandas: {aliases: [판다스], competencies: [C07]}
+  spark: {aliases: [pyspark, Apache Spark, 스파크], competencies: [C07]}
+  airflow: {aliases: [Apache Airflow, apache-airflow, 에어플로], competencies: [C07]}
+  fastapi: {aliases: [FastAPI], competencies: [C08]}
+  django: {aliases: [장고], competencies: [C08]}
+  jwt: {aliases: [pyjwt, JWT], competencies: [C08, C13]}
+  redis: {aliases: [레디스], competencies: [C08]}
+  postgresql: {aliases: [postgres, PostgreSQL], competencies: [C08]}
+  docker: {aliases: [도커], competencies: [C09]}
+  kubernetes: {aliases: [k8s, 쿠버네티스], competencies: [C09, C06]}
+  aws: {aliases: [Amazon Web Services], competencies: [C09]}
+  gcp: {aliases: [Google Cloud], competencies: [C09]}
+  github_actions: {aliases: [GitHub Actions], competencies: [C09, C10]}
+  pytest: {aliases: [], competencies: [C10]}
+  nextjs: {aliases: [next, Next.js, next.js], competencies: []}
+  react: {aliases: [리액트], competencies: []}
