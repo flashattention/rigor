@@ -86,6 +86,7 @@ class DiagnosisReport:
     reconcile: ReconcileOutcome
     cards: list[InterviewCard]
     judgements: list[RepoJudgement]
+    linked_repo_ids: set[int]
     grade_inputs: GradeInputs
     diagnosis: Diagnosis
     improvements: dict[int, list[Improvement]]
@@ -158,8 +159,13 @@ def run_pipeline(
         audits[j.repo_id] = audits[j.repo_id].model_copy(
             update={"verdict_for_jd": j.verdict, "rubric_scores": j.scores}
         )
+    linked_ids = {f.repo_link.repo_id for f in profile.facts if f.repo_link and f.repo_link.repo_id}
+    linked_judgements = [j for j in judgements if j.repo_id in linked_ids]
     showcase_reqs = {
-        r for j in judgements if j.verdict is RepoVerdict.SHOWCASE for r in j.relevant_requirements
+        r
+        for j in linked_judgements
+        if j.verdict is RepoVerdict.SHOWCASE
+        for r in j.relevant_requirements
     }
     grade, trace, gi = compute_grade(job, match.verdicts, showcase_reqs)
     redirect = suggest_redirect(job, grade, evidence, audits, judgements)
@@ -172,7 +178,7 @@ def run_pipeline(
     )
     report = VerifyReport()
     gaps = keep_cited(classify_gaps(job, match.verdicts, audits), index, report, "gap")
-    weak = keep_cited(weaknesses(profile, audits, judgements), index, report, "weakness")
+    weak = keep_cited(weaknesses(profile, audits, linked_judgements), index, report, "weakness")
     redirect = (
         (keep_cited([redirect], index, report, "redirect") or [None])[0] if redirect else None
     )
@@ -189,7 +195,7 @@ def run_pipeline(
     )
 
     # E5·E6 로드맵, E7 이력서 배치
-    improvements = {j.repo_id: improvements_for(audits[j.repo_id], j) for j in judgements}
+    improvements = {j.repo_id: improvements_for(audits[j.repo_id], j) for j in linked_judgements}
     improvements = {k: keep_cited(v, index, report, "improvement") for k, v in improvements.items()}
     budget = budget_days(evidence, today)
     new_projects, plan_warnings = plan_new_projects(client, job, gaps, budget)
@@ -218,6 +224,7 @@ def run_pipeline(
         reconcile=outcome,
         cards=cards,
         judgements=judgements,
+        linked_repo_ids=linked_ids,
         grade_inputs=gi,
         diagnosis=diagnosis,
         improvements=improvements,

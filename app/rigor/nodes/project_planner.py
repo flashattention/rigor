@@ -20,6 +20,9 @@ from rigor.schemas.profile import Profile
 from rigor.schemas.repo import DoneCriterion, Impact, Improvement
 
 DEFAULT_BUDGET_DAYS = 21.0
+# 관례값: 한 번에 실행할 수 있는 분량. 실제 리포트에서 26개 항목이 나와 읽을 수 없었다
+MAX_ITEMS_PER_REPO = 3
+MAX_ROADMAP_ITEMS = 8
 NEW_PROJECT_PATHS = {
     "readme.sections",
     "tests.file_count",
@@ -115,9 +118,10 @@ def assemble_roadmap(
     budget: float,
 ) -> Roadmap:
     severity = {g.requirement_id: g.severity for g in gaps}
-    scored: list[tuple[float, RoadmapItem]] = []
+    scored: list[tuple[float, float, RoadmapItem]] = []
     for repo_id, imps in improvements.items():
-        for imp in imps:
+        ranked = sorted(imps, key=lambda i: (-_IMPACT_W[i.impact], i.effort_days))
+        for imp in ranked[:MAX_ITEMS_PER_REPO]:
             reqs = [c.ref_id for c in imp.citations if c.kind == "requirement"]
             if not reqs:
                 continue
@@ -131,16 +135,16 @@ def assemble_roadmap(
                 addresses_requirements=reqs,
                 repo_id=repo_id,
             )
-            scored.append((_IMPACT_W[imp.impact] / imp.effort_days, item))
+            scored.append((_IMPACT_W[imp.impact], imp.effort_days, item))
     for p in new_projects:
         w = max(
             _SEVERITY_W.get(severity.get(r, Severity.MINOR), 1.0) for r in p.addresses_requirements
         )
-        scored.append((w * 2 / p.effort_days, p))
-    scored.sort(key=lambda x: -x[0])
+        scored.append((w, p.effort_days, p))
+    scored.sort(key=lambda x: (-x[0], x[1]))  # 효과 먼저, 같으면 싼 것부터
     chosen, used = [], 0.0
-    for _, item in scored:
-        if used + item.effort_days > budget:
+    for _, _, item in scored:
+        if len(chosen) >= MAX_ROADMAP_ITEMS or used + item.effort_days > budget:
             continue
         used += item.effort_days
         chosen.append(item.model_copy(update={"priority": len(chosen) + 1}))

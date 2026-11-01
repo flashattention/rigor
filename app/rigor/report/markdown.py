@@ -5,6 +5,7 @@ from __future__ import annotations
 from rigor.pipeline import DiagnosisReport
 from rigor.schemas.common import Citation
 from rigor.schemas.diagnosis import Grade, VerdictStatus
+from rigor.schemas.profile import FactCategory
 from rigor.schemas.repo import ClaimResult, RepoVerdict
 
 GRADE_LABEL = {
@@ -99,8 +100,16 @@ def render_markdown(r: DiagnosisReport) -> str:
                 f"- [{CLAIM_LABEL[c.result]}] {facts[c.fact_id].content}: {c.claim}"
                 + (f" — {c.action}" if c.action and c.result is not ClaimResult.SUPPORTED else "")
             )
+    unverifiable: dict[str, int] = {}
     for c in r.no_repo_checks:
-        out.append(f"- [{CLAIM_LABEL[c.result]}] {facts[c.fact_id].content}: {c.claim}")
+        if facts[c.fact_id].category in (FactCategory.PROJECT, FactCategory.EXPERIENCE):
+            unverifiable[facts[c.fact_id].content] = (
+                unverifiable.get(facts[c.fact_id].content, 0) + 1
+            )
+    for content, n in unverifiable.items():
+        out.append(
+            f"- [{CLAIM_LABEL[ClaimResult.UNVERIFIABLE]}] {content}: 주장 {n}개 — 면접에서 설명할 준비"
+        )
     if r.reconcile.decisions:
         out.append("")
         out.append("### 정합 결과")
@@ -116,7 +125,17 @@ def render_markdown(r: DiagnosisReport) -> str:
     out.append("")
 
     out.append("## 저장소 판정과 이력서 배치")
+    others = [j for j in r.judgements if j.repo_id not in r.linked_repo_ids]
+    for j in others:
+        if j.verdict is RepoVerdict.SHOWCASE:
+            out.append(
+                f"- 이력서에 없지만 대표로 쓸 만함: **{r.audits[j.repo_id].full_name}** · 품질 {j.quality:.0%}"
+            )
+    if others:
+        out.append(f"- 이력서에 연결되지 않은 저장소 {len(others)}개는 아래 판정에서 뺐다")
     for j in r.judgements:
+        if j.repo_id not in r.linked_repo_ids:
+            continue
         a = r.audits[j.repo_id]
         extra = "; ".join(j.blockers + j.notes)
         out.append(
@@ -141,8 +160,9 @@ def render_markdown(r: DiagnosisReport) -> str:
     out.append(f"## 로드맵 (가용 기간 약 {r.budget_days:g}일)")
     for item in r.roadmap.items:
         done = "; ".join(f"{c.signal_path} {c.op} {c.value}" for c in item.done_criteria)
+        where = f"{r.audits[item.repo_id].full_name}: " if item.repo_id in r.audits else ""
         out.append(
-            f"{item.priority}. [{item.kind.value}] {item.title} ({item.effort_days:g}일) — 요건 {', '.join(item.addresses_requirements)}"
+            f"{item.priority}. [{item.kind.value}] {where}{item.title} ({item.effort_days:g}일) — 요건 {', '.join(item.addresses_requirements)}"
         )
         out.append(f"   - 완료 기준(재감사로 확인): {done}")
         if item.resume_line_example:
