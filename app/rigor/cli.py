@@ -110,6 +110,108 @@ def synth_build(
     typer.echo(f"built {case_id}: {len(paths)} repos → {out}")
 
 
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    """.env의 키를 환경 변수로 (이미 설정된 값은 덮어쓰지 않음). 값은 출력하지 않는다."""
+    import os
+
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#") and value:
+            os.environ.setdefault(key, value.strip().strip('"'))
+
+
+@app.command()
+def prepare(
+    resume: Path = typer.Option(..., exists=True, help="이력서 파일 (텍스트·PDF·DOCX)"),
+    jd: Path = typer.Option(..., exists=True, help="공고 텍스트 파일"),
+    out: Path = typer.Option(..., help="결과 JSON 경로"),
+    repos: list[Path] = typer.Option([], help="본인 커밋 신원을 확인할 로컬 git 저장소"),
+    login: str = typer.Option("", help="GitHub 로그인 (커밋 신원 기준)"),
+    profile: str | None = typer.Option(None, help="라우팅 프로필"),
+    mode: str = typer.Option("replay", help="live | record | replay"),
+    max_usd: float = typer.Option(0.05, help="이번 실행의 LLM 비용 상한 (USD)"),
+    yes: bool = typer.Option(False, "--yes", help="추출된 fact를 모두 확인 처리 (비대화형)"),
+) -> None:
+    """A단계: 이력서·공고를 구조화하고 사용자 확인을 받는다."""
+    from rigor.ingest.files import IngestError, extract_text
+    from rigor.ingest.privacy import mask_pii
+    from rigor.llm.factory import build_client
+    from rigor.nodes.identity import collect_authors, confirm_aliases, propose_aliases
+    from rigor.nodes.jd_parser import parse_jd
+    from rigor.nodes.profile_builder import confirm_facts, extract_profile
+    from rigor.schemas.profile import CommitIdentity, FactStatus
+
+    _load_dotenv()
+    client = build_client(profile=profile, mode=mode, max_usd=max_usd)  # type: ignore[arg-type]
+    try:
+        extracted = extract_text(resume.read_bytes())
+    except IngestError as exc:
+        typer.echo(f"이력서를 읽을 수 없습니다: {exc}")
+        raise typer.Exit(code=1) from exc
+    if extracted.needs_ocr:
+        typer.echo("OCR이 필요한 파일입니다 (M1b에서 지원). 텍스트 PDF나 텍스트로 올려 주세요.")
+        raise typer.Exit(code=1)
+    mask = mask_pii(extracted.text)
+    typer.echo(
+        f"민감정보 줄 {mask.discarded_sensitive_lines}개 제거, 저장소 링크 {len(mask.repo_urls)}개"
+    )
+
+    extraction = extract_profile(client, mask, profile_id="p_cli")
+    for w in extraction.warnings:
+        typer.echo(f"  경고: {w}")
+
+    def decide(fact, uncertain):
+        flag = f"  (모호: {', '.join(uncertain)})" if uncertain else ""
+        typer.echo(f"[{fact.id}] {fact.category.value}: {fact.content}{flag}")
+        for c in fact.claims:
+            typer.echo(f"    - ({c.type.value}) {c.text}")
+        if yes:
+            return FactStatus.CONFIRMED
+        ok = typer.confirm("  이 항목이 사실과 맞습니까?", default=True)
+        return FactStatus.CONFIRMED if ok else FactStatus.REJECTED
+
+    confirmed = confirm_facts(extraction, decide)
+    parsed = parse_jd(client, jd.read_text(encoding="utf-8"), job_id="j_cli")
+    for w in parsed.warnings:
+        typer.echo(f"  공고 경고: {w}")
+    for r in parsed.job.requirements:
+        typer.echo(f"[{r.id}] {r.kind.value:<9} {r.text}")
+
+    if repos:
+        identity = CommitIdentity(github_login=login, emails=[], name_aliases=[])
+        candidates = propose_aliases(identity, collect_authors(repos))
+        for i, c in enumerate(candidates):
+            typer.echo(f"  ({i}) {c.name} <{c.email}> 커밋 {c.commits}개 {'; '.join(c.reasons)}")
+
+        def choose(cands):
+            if yes:
+                return [c.email for c in cands if c.score > 0]
+            raw = typer.prompt("본인 커밋 신원 번호(쉼표로 구분, 없으면 빈칸)", default="")
+            return [cands[int(x)].email for x in raw.split(",") if x.strip()]
+
+        confirmed = confirmed.model_copy(
+            update={"identity": confirm_aliases(identity, candidates, choose)}
+        )
+
+    out.write_text(
+        json.dumps(
+            {
+                "profile": confirmed.model_dump(mode="json"),
+                "job": parsed.job.model_dump(mode="json"),
+                "prompts": [extraction.prompt_id, parsed.prompt_id],
+                "routing_hash": client.routing.hash,
+                "cost_usd": client.meter.total_usd,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    typer.echo(f"저장: {out}  (LLM 비용 ${client.meter.total_usd:.4f})")
+
+
 def confirm_spend(usd: float, yes: bool) -> None:
     """실제 호출 평가 전 확인. --yes 없이 비용이 드는 실행은 하지 않는다."""
     if usd <= 0 or yes:
