@@ -12,3 +12,5 @@
 | 2026-11-01 | **pytest**, **ruff** | 사실상 표준. ruff는 린트와 포맷을 한 도구로 | flake8+black |
 | 2026-11-01 | 제공자 SDK(`openai`, `anthropic`)는 **선택 의존성** | 테스트·fake 프로필은 SDK 없이 돈다. 어댑터는 실제로 쓸 때만 import | 필수 의존성 |
 | 2026-11-01 | 구조화 출력은 **Pydantic으로 최종 검증** (제공자 strict 모드에 의존하지 않음) | 제공자마다 strict 스키마 제약이 달라 교체 비용이 커진다. 검증 실패 시 오류를 붙여 1회 재요청 | 제공자 strict 모드 |
+| 2026-11-01 | **pypdf** (PDF 텍스트 추출) | 순수 Python, BSD 라이선스, 외부 바이너리 없음. 텍스트 PDF만 처리하고 스캔 PDF는 OCR 경로로 넘긴다 (ADR-0011) | pdfminer.six, PyMuPDF(AGPL) |
+| 2026-11-01 | **defusedxml** (DOCX XML 파싱) | 업로드 파일은 신뢰할 수 없는 입력이다. 표준 XML 파서의 엔티티 확장 공격을 막는다. DOCX는 별도 라이브러리 없이 ZIP + XML로 읽는다 | python-docx |
