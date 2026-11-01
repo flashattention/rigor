@@ -44,6 +44,10 @@ class CheckedVerdict:
     downgraded: bool = False
 
 
+# 공백·기호·한두 글자는 어느 파일에나 있어 출처를 증명하지 못한다
+_IDENTIFYING = re.compile(r"[^\W_]{3,}")
+
+
 def _squash(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().casefold()
 
@@ -58,7 +62,8 @@ def citation_holds(ws: RepoWorkspace, c: CitationDraft) -> bool:
     lines = text.splitlines()
     low = max(0, c.line - 1 - LINE_TOLERANCE)
     window = _squash(" ".join(lines[low : c.line + LINE_TOLERANCE]))
-    return bool(window) and _squash(c.quote) in window
+    quote = _squash(c.quote)
+    return bool(_IDENTIFYING.search(quote)) and quote in window
 
 
 def check_submission(ws: RepoWorkspace, arguments: dict[str, Any]) -> CheckedVerdict:

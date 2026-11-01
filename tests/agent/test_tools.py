@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from rigor.agent.tools import MAX_READ_LINES, RepoWorkspace, execute_tool
 from rigor.agent.verdict import check_submission, to_claim_check
 from rigor.github_audit.snapshot import CommitInfo, FileChange, RepoMeta, RepoSnapshot
@@ -124,6 +126,14 @@ def test_forged_quote_or_unopened_file_or_wrong_line_is_downgraded():
     for bad in (cite(quote="import langgraph"), cite(line=1), cite(path="README.md")):
         v = check_submission(w, {"result": "supported", "citations": [bad]})
         assert v.result is ClaimResult.UNVERIFIABLE and v.downgraded
+
+
+@pytest.mark.parametrize("quote", [" ", "(", "a", "()"])
+def test_quote_without_identifying_text_is_downgraded(quote):
+    w = ws()
+    w.read_file("src/retrieval.py")
+    v = check_submission(w, {"result": "supported", "citations": [cite(quote=quote)]})
+    assert v.result is ClaimResult.UNVERIFIABLE and v.downgraded
 
 
 def test_supported_without_citation_and_malformed_submission_are_downgraded():
