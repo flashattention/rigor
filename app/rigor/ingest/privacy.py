@@ -16,6 +16,11 @@ _SENSITIVE_LINE = re.compile(
     r"(\d{4}\s*년\s*생|만\s*\d{1,2}\s*세|생년월일|나이\s*[:：]|성별|병역|군필|미필|군\s*면제|"
     r"장애\s*(인|등급|여부|유무|정도)|장애\s*[:：]|보훈|혼인|기혼|미혼|종교|가족\s*관계|주소\s*[:：]|(^|[\s/|])(남|여|남성|여성)\s*$)"
 )
+# 문장 중간의 병역 언급은 줄을 통째로 버리면 다른 내용까지 잃으므로 그 부분만 지운다
+_MILITARY = re.compile(
+    r"(?:공군|육군|해군|해병대|의무경찰|카투사|산업기능요원|전문연구요원|사회복무요원)(?:\s*(?:복무|전역|제대|만기))?"
+    r"|군\s*(?:복무|전역|제대)"
+)
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(\+82[\s-]?)?0?1[016789][\s.-]?\d{3,4}[\s.-]?\d{4}")
 _GITHUB_REPO = re.compile(
@@ -36,6 +41,7 @@ class MaskResult:
     mapping: dict[str, str] = field(default_factory=dict)  # 토큰 → 원래 값
     repo_urls: dict[str, str] = field(default_factory=dict)  # [REPO_n] → https://github.com/o/r
     discarded_sensitive_lines: int = 0
+    schools: list[str] = field(default_factory=list)  # 노출 점검용. LLM에는 가지 않는다
 
     def unmask(self, text: str) -> str:
         for token, original in self.mapping.items():
@@ -53,7 +59,10 @@ def detect_name(text: str) -> str | None:
     return None
 
 
-def mask_pii(text: str, known_names: list[str] | None = None) -> MaskResult:
+def mask_pii(
+    text: str, known_names: list[str] | None = None, extra_terms: list[str] | None = None
+) -> MaskResult:
+    """extra_terms: 패턴으로 못 잡는 식별어 (예: 대회명 속 학교 약칭). 사용자가 지정한다."""
     result = MaskResult(text="")
     kept = []
     for line in text.splitlines():
@@ -61,7 +70,10 @@ def mask_pii(text: str, known_names: list[str] | None = None) -> MaskResult:
             result.discarded_sensitive_lines += 1
             continue
         kept.append(line)
-    masked = "\n".join(kept)
+    masked = _MILITARY.sub("[REDACTED]", "\n".join(kept))
+    for term in extra_terms or []:
+        if term:
+            masked = masked.replace(term, "[MASKED]")
 
     names = [n for n in (known_names or []) if n]
     if not names and (detected := detect_name(text)):
@@ -92,6 +104,11 @@ def mask_pii(text: str, known_names: list[str] | None = None) -> MaskResult:
     masked = _GITHUB_PROFILE.sub(lambda m: token_for("GITHUB", m.group(0)), masked)
     masked = _EMAIL.sub(lambda m: token_for("EMAIL", m.group(0)), masked)
     masked = _PHONE.sub(lambda m: token_for("PHONE", m.group(0)), masked)
-    masked = _SCHOOL.sub(lambda m: "[SCHOOL]", masked)
+
+    def school_sub(m: re.Match) -> str:
+        result.schools.append(m.group(0))
+        return "[SCHOOL]"
+
+    masked = _SCHOOL.sub(school_sub, masked)
     result.text = masked
     return result

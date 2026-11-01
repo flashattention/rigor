@@ -302,3 +302,19 @@ def test_selection_includes_contributed_team_repo_and_skips_others():
         ],
     )
     assert identity_from_account("me", {3: snap}).emails == ["me@work.com"]
+
+
+def test_one_failing_repo_does_not_stop_the_run():
+    # 실제 계정에서 관찰: 빈 저장소는 GitHub API가 409를 돌려준다
+    from types import SimpleNamespace
+
+    from rigor.github_audit.api_source import GitHubError
+    from rigor.github_audit.selection import fetch_snapshots
+
+    def snapshot(name):
+        if name == "me/empty":
+            raise GitHubError("GitHub API 오류 409")
+        return SimpleNamespace(meta=SimpleNamespace(repo_id=1))
+
+    snaps, failures = fetch_snapshots(SimpleNamespace(snapshot=snapshot), ["me/empty", "me/ok"])
+    assert list(snaps) == [1] and failures[0][0] == "me/empty"

@@ -179,3 +179,45 @@ def test_competency_codes_with_labels_are_normalized():
     )
     assert job.requirements[0].competencies == ["C08"]
     assert any("C99" in w for w in warnings)
+
+
+def test_claim_with_unknown_type_is_dropped_without_failing_the_run():
+    # 실제 이력서 실행에서 gpt-5-nano가 학력 항목에 type="degree"를 지어냈다
+    mask = mask_pii("- p\n")
+    draft = ProfileDraft.model_validate(
+        {
+            "facts": [
+                {
+                    "category": "education",
+                    "content": "학사",
+                    "claims": [
+                        {"type": "degree", "text": "학사"},
+                        {"type": "tech", "text": "Python"},
+                    ],
+                }
+            ]
+        }
+    )
+    profile, warnings, _ = build_profile(draft, mask, "p")
+    assert [c.text for c in profile.facts[0].claims] == ["Python"]
+    assert any("degree" in w for w in warnings)
+
+
+def test_invalid_fact_or_metric_is_isolated_and_reported():
+    # 실제 이력서 실행에서 관찰: category="awards", metric value=null, 없는 category
+    draft = ProfileDraft.model_validate(
+        {
+            "facts": [
+                {
+                    "category": "awards",
+                    "content": "수상",
+                    "metrics": [{"name": "x", "value": None, "unit": "%"}],
+                },
+                {"category": "hobby", "content": "취미"},
+            ]
+        }
+    )
+    profile, warnings, _ = build_profile(draft, mask_pii("- p\n"), "p")
+    assert [f.category for f in profile.facts] == [FactCategory.AWARD]
+    assert profile.facts[0].metrics == []
+    assert any("취미" in w for w in warnings)

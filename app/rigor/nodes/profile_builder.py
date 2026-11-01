@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 
-from pydantic import Field
+from pydantic import Field, ValidationError, field_validator, model_validator
 
 from rigor.ingest.privacy import MaskResult
 from rigor.llm.client import LLMClient
@@ -34,10 +34,13 @@ from rigor.schemas.profile import (
 from rigor.taxonomy import load_taxonomy
 
 TASK = "fact_extract"
+_CLAIM_TYPES = {t.value for t in ClaimType}
+_CATEGORIES = {c.value for c in FactCategory}
 
 
 class ClaimDraft(DraftModel):
-    type: ClaimType
+    # 모델이 없는 유형을 지어내도 그 claim만 버리도록 문자열로 받는다 (스키마 힌트는 유지)
+    type: str = Field(json_schema_extra={"enum": [t.value for t in ClaimType]})
     text: str = Field(min_length=1)
 
 
@@ -57,9 +60,46 @@ class FactDraft(DraftModel):
     claims: list[ClaimDraft] = Field(default_factory=list)
     uncertain: list[str] = Field(default_factory=list)
 
+    @field_validator("category", mode="before")
+    @classmethod
+    def _singular_category(cls, v):
+        # 실제 실행에서 관찰: "awards"
+        if isinstance(v, str) and v not in _CATEGORIES and v.rstrip("s") in _CATEGORIES:
+            return v.rstrip("s")
+        return v
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def _drop_invalid_metrics(cls, v):
+        # 수치가 없는 metric(value=null)은 버린다. 원문 주장은 claim으로 남는다.
+        out = []
+        for m in v or []:
+            try:
+                out.append(Metric.model_validate(m))
+            except ValidationError:
+                continue
+        return out
+
 
 class ProfileDraft(DraftModel):
+    """fact 하나가 스키마를 어겨도 전체를 실패시키지 않는다. 버린 항목은 경고로 드러낸다."""
+
     facts: list[FactDraft]
+    dropped_facts: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _isolate_invalid_facts(cls, data):
+        if not isinstance(data, dict) or not isinstance(data.get("facts"), list):
+            return data
+        kept, dropped = [], list(data.get("dropped_facts") or [])
+        for item in data["facts"]:
+            try:
+                kept.append(FactDraft.model_validate(item))
+            except ValidationError:
+                label = item.get("content") if isinstance(item, dict) else item
+                dropped.append(str(label)[:60])
+        return {**data, "facts": kept, "dropped_facts": dropped}
 
 
 @dataclass
@@ -101,7 +141,7 @@ def build_profile(
 ) -> tuple[Profile, list[str], dict[str, list[str]]]:
     """LLM 초안 → Profile (순수 함수, 테스트 대상)."""
     taxonomy = load_taxonomy()
-    warnings: list[str] = []
+    warnings: list[str] = [f"형식 오류로 버린 항목: {d}" for d in draft.dropped_facts]
     uncertain: dict[str, list[str]] = {}
     facts: list[Fact] = []
     for i, d in enumerate(draft.facts, start=1):
@@ -122,7 +162,10 @@ def build_profile(
             if is_injection(c.text):
                 warnings.append(f"{fid}: injection-like claim dropped")
                 continue
-            claims.append(Claim(id=f"c_{i}_{j}", fact_id=fid, type=c.type, text=c.text))
+            if c.type not in _CLAIM_TYPES:
+                warnings.append(f"{fid}: claim with unknown type '{c.type}' dropped")
+                continue
+            claims.append(Claim(id=f"c_{i}_{j}", fact_id=fid, type=ClaimType(c.type), text=c.text))
         start, end = _parse_date(d.start), _parse_date(d.end)
         if start and end and end < start:
             warnings.append(f"{fid}: end before start, dates cleared")

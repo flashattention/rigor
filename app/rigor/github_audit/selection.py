@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from rigor.github_audit.api_source import GitHubError
 from rigor.github_audit.snapshot import RepoMeta, RepoSnapshot
 from rigor.nodes.repo_linking import LINKABLE, RepoFacts, score_candidate
 from rigor.schemas.profile import CommitIdentity, Profile
@@ -55,6 +56,41 @@ def select_repos(profile: Profile, owned: list[RepoMeta], login: str, is_contrib
         f"후보 탐색은 메타데이터 1차 선별 상위 {CANDIDATES_PER_FACT}개/항목 (전체 {len(owned)}개 중)"
     ]
     return Selection(list(chosen), skipped, notes)
+
+
+def fetch_snapshots(
+    source, full_names: list[str]
+) -> tuple[dict[int, RepoSnapshot], list[tuple[str, str]]]:
+    """저장소 하나(빈 저장소 등)의 실패가 전체 진단을 멈추지 않게 한다."""
+    snaps: dict[int, RepoSnapshot] = {}
+    failures: list[tuple[str, str]] = []
+    for full in full_names:
+        try:
+            snap = source.snapshot(full)
+        except GitHubError as exc:
+            failures.append((full, str(exc)[:120]))
+            continue
+        snaps[snap.meta.repo_id] = snap
+    return snaps, failures
+
+
+def name_matched_emails(login: str, snapshots: dict[int, RepoSnapshot]) -> list[str]:
+    """계정에 연결된 커밋과 작성자 이름이 같지만 계정에 연결되지 않은 커밋의 이메일 (별칭 후보).
+
+    다른 PC의 git 설정으로 쓴 커밋이 여기에 해당한다. 놓치면 기여가 크게 줄어든다.
+    다른 계정에 연결된 커밋은 후보에서 뺀다. 사용자가 확인한 것만 본인 커밋으로 센다 (A6).
+    """
+    commits = [c for s in snapshots.values() for c in s.commits]
+    names = {c.author_name.casefold() for c in commits if c.author_login == login} | {
+        login.casefold()
+    }
+    return sorted(
+        {
+            c.author_email
+            for c in commits
+            if c.author_login is None and c.author_email and c.author_name.casefold() in names
+        }
+    )
 
 
 def identity_from_account(

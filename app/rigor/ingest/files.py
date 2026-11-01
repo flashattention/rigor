@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import io
+import unicodedata
 import zipfile
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -76,16 +77,21 @@ def extract_text(data: bytes) -> ExtractedText:
         raise IngestError("빈 파일입니다.")
     fmt = detect_format(data)
     if fmt is FileFormat.TEXT:
-        return ExtractedText(fmt, _decode_text(data))
+        return ExtractedText(fmt, _normalize(_decode_text(data)))
     if fmt is FileFormat.PDF_TEXT:
         return _extract_pdf(data)
     if fmt is FileFormat.DOCX:
-        return ExtractedText(fmt, _extract_docx(data))
+        return ExtractedText(fmt, _normalize(_extract_docx(data)))
     if fmt in (FileFormat.HWP, FileFormat.HWPX):
         raise IngestError(
             "HWP/HWPX 지원은 준비 중입니다. PDF로 저장해 올리거나 텍스트를 붙여넣어 주세요."
         )
     return ExtractedText(fmt, "", needs_ocr=True, warnings=["이미지 파일은 OCR이 필요합니다."])
+
+
+def _normalize(text: str) -> str:
+    """NFKC: PDF의 합자(ﬂ, ﬁ, ﬃ)를 풀어 URL·기술명이 인식되게 한다."""
+    return unicodedata.normalize("NFKC", text)
 
 
 def _decode_text(data: bytes) -> str:
@@ -111,7 +117,7 @@ def _extract_pdf(data: bytes) -> ExtractedText:
         texts = [(page.extract_text() or "") for page in reader.pages]
     except PdfReadError as exc:
         raise IngestError("PDF를 읽을 수 없습니다.") from exc
-    text = "\n".join(texts).strip()
+    text = _normalize("\n".join(texts)).strip()
     if len(text) < MIN_CHARS_PER_PAGE * max(pages, 1):
         return ExtractedText(
             FileFormat.PDF_SCAN,

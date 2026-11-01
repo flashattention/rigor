@@ -14,6 +14,10 @@ profiles:
   openai_phase1:
     default: {provider: openai, model: gpt-5-nano, params: {max_completion_tokens: 16000, reasoning_effort: minimal}}
 
+  # 실제 이력서 확인용. nano는 실제 이력서에서 스키마 위반이 잦았다 (공식 기준선 아님).
+  openai_mini:
+    default: {provider: openai, model: gpt-5-mini, params: {max_completion_tokens: 16000, reasoning_effort: minimal}}
+
   # 단계 2: Max 포함 API 크레딧. 공식 기준선은 이 프로필로 측정한다.
   anthropic_haiku:
     default: {provider: anthropic, model: claude-haiku-5-5, params: {max_tokens: 8000, temperature: 0}}

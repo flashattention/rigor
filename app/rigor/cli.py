@@ -226,6 +226,9 @@ def diagnose(
     github_login: str | None = typer.Option(
         None, help="GitHub 계정: 본인 소유 + 이력서에 링크된 기여 저장소를 자동 수집"
     ),
+    mask_term: list[str] = typer.Option(
+        [], help="LLM에 보내기 전에 가릴 식별어 (예: 대회명 속 학교 약칭)"
+    ),
     use_gh_token: bool = typer.Option(
         False, help="gh CLI 토큰을 GitHub API 요청 한도 용도로만 사용 (읽기 요청만 보냄)"
     ),
@@ -312,17 +315,20 @@ def diagnose(
         truth_profile = None
         exposure = None
 
-    mask = mask_pii(resume_text)
+    mask = mask_pii(resume_text, extra_terms=mask_term)
     if exposure is None:
         exposure = ExposureContext(
             names=[v for k, v in mask.mapping.items() if k == "[NAME]"],
             phones=[v for k, v in mask.mapping.items() if k.startswith("[PHONE")],
             emails=[v for k, v in mask.mapping.items() if k.startswith("[EMAIL")],
+            schools=[*mask.schools, *mask_term],
         )
     if truth_profile is not None:
         prof = truth_profile
     else:
         extraction = extract_profile(client, mask, "p_cli")
+        for w in extraction.warnings:
+            typer.echo(f"  추출 경고: {w}")
         prof = confirm_facts(
             extraction,
             lambda f, u: (
@@ -334,7 +340,12 @@ def diagnose(
         prof = prof.model_copy(update={"identity": identity})
     if github_login and not synth_case:
         from rigor.github_audit.api_source import GitHubSource
-        from rigor.github_audit.selection import identity_from_account, select_repos
+        from rigor.github_audit.selection import (
+            fetch_snapshots,
+            identity_from_account,
+            name_matched_emails,
+            select_repos,
+        )
 
         source = GitHubSource()
         owned = source.list_user_repos(github_login)
@@ -344,13 +355,26 @@ def diagnose(
         for name in sel.skipped_not_mine:
             typer.echo(f"  본인 계정 커밋이 없는 저장소라 분석하지 않음: {name}")
         typer.echo(f"  수집할 저장소 {len(sel.full_names)}개: {', '.join(sel.full_names)}")
-        for full in sel.full_names:
-            snap = source.snapshot(full)
-            snaps[snap.meta.repo_id] = snap
+        fetched, failures = fetch_snapshots(source, sel.full_names)
+        snaps.update(fetched)
+        for full, reason in failures:
+            typer.echo(f"  수집 실패로 건너뜀: {full} ({reason})")
+        aliases = name_matched_emails(github_login, snaps)
+        if aliases and not yes:
+            typer.echo(
+                f"  계정에 연결되지 않았지만 작성자 이름이 같은 커밋 이메일: {', '.join(aliases)}"
+            )
+            if not typer.confirm("  이 커밋들이 본인 것입니까?", default=True):
+                aliases = []
+        if aliases:
+            typer.echo(f"  이름이 일치하는 별칭 이메일 {len(aliases)}개를 본인 커밋으로 집계")
         prof = prof.model_copy(
-            update={"identity": identity_from_account(github_login, snaps, email)}
+            update={"identity": identity_from_account(github_login, snaps, [*email, *aliases])}
         )
-    job = parse_jd(client, jd_text, "j_cli").job
+    parsed = parse_jd(client, jd_text, "j_cli")
+    for w in parsed.warnings:
+        typer.echo(f"  공고 경고: {w}")
+    job = parsed.job
 
     def choose_unlinked(fact, item):
         top = item.candidates[0] if item.candidates else None
