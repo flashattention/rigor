@@ -18,5 +18,9 @@
 | [0010](0010-vector-db-rag-scope.md) | 벡터 DB·RAG 도입 범위 | 채택됨 |
 | [0011](0011-resume-input-formats.md) | 이력서 입력 형식 (HWP·스캔 PDF 포함) | 채택됨 |
 | [0012](0012-direct-tone-only.md) | 진단 어조를 직설로 고정 | 채택됨 |
+| [0013](0013-grades-not-probabilities.md) | 합격 확률 대신 근거 기반 등급 | 채택됨 |
+| [0014](0014-exclude-protected-attributes.md) | 보호 속성을 판정 신호에서 제외 (구조적 차단) | 채택됨 |
+| [0015](0015-applicant-side-no-b2b.md) | 지원자 편 원칙 — B2B 채용 평가와 유료 노출 금지 | 채택됨 |
+| [0016](0016-defer-matching.md) | 매칭 기능을 M4 이후로 이연 | 채택됨 |
 
-후보(아직 작성 안 함): 확률 대신 등급 · 보호 속성 제외 · B2B 확장 금지 · 매칭 기능 이연 · 프론트엔드.
+후보(아직 작성 안 함): 프론트엔드(M3).
