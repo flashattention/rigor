@@ -50,28 +50,24 @@ def audit_repo(
     checks, evidence, pending = [], [], []
     for fact in facts:
         result = check_claims_by_rules(fact, snap, signals, contribution)
-        checks += result.checks
-        evidence += result.evidence
+        # fact마다 id가 1부터 시작하므로 저장소 단위로 다시 매긴다. 같은 저장소에 fact가 여럿일 수 있다
+        mapping = {}
+        for ev in result.evidence:
+            new_id = f"e_{snap.meta.repo_id}_{len(evidence) + 1}"
+            mapping[ev.id] = new_id
+            evidence.append(ev.model_copy(update={"id": new_id}))
+        checks += [
+            c.model_copy(
+                update={
+                    "evidence": [
+                        e.model_copy(update={"ref_id": mapping.get(e.ref_id, e.ref_id)})
+                        for e in c.evidence
+                    ]
+                }
+            )
+            for c in result.checks
+        ]
         pending += result.pending
-    # 같은 저장소에 여러 fact가 연결될 수 있으므로 근거 id를 저장소 단위로 다시 매긴다
-    renamed, mapping = [], {}
-    for i, ev in enumerate(evidence, start=1):
-        new_id = f"e_{snap.meta.repo_id}_{i}"
-        mapping[ev.id] = new_id
-        renamed.append(ev.model_copy(update={"id": new_id}))
-    if len(mapping) != len(evidence):
-        raise AssertionError("evidence id collision")
-    checks = [
-        c.model_copy(
-            update={
-                "evidence": [
-                    e.model_copy(update={"ref_id": mapping.get(e.ref_id, e.ref_id)})
-                    for e in c.evidence
-                ]
-            }
-        )
-        for c in checks
-    ]
     audit = RepoAudit(
         repo_id=snap.meta.repo_id,
         full_name=snap.meta.full_name,
@@ -80,7 +76,7 @@ def audit_repo(
         is_fork=snap.meta.is_fork,
         signals=signals,
         contribution=contribution,
-        evidence=renamed,
+        evidence=evidence,
         claim_checks=checks,
         exposure_findings=scan_exposure(snap, exposure),
         scan_scope=snap.scope,
