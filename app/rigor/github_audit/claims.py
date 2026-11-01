@@ -35,7 +35,10 @@ from rigor.schemas.repo import (
 from rigor.taxonomy import load_taxonomy
 
 _OWNERSHIP = re.compile(
-    r"주도|전체|리드|총괄|단독|혼자|전담|lead|led|owned|architect", re.IGNORECASE
+    # 단어 경계가 없으면 failed·하이브리드에도 걸려, 참인 주장을 "근거와 다름"으로 지적한다
+    r"주도|전체|(?<![가-힣])리드|총괄|단독|혼자|전담"
+    r"|(?<![A-Za-z])(?:lead(?:s|er|ing)?|led|own(?:s|ed|er)|architect(?:s|ed)?)(?![A-Za-z])",
+    re.IGNORECASE,
 )
 _NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|분|초|시간|배|ms|s|x|건|명|만|k)?", re.IGNORECASE)
 _AREA_WORDS = {
