@@ -22,5 +22,6 @@
 | [0014](0014-exclude-protected-attributes.md) | 보호 속성을 판정 신호에서 제외 (구조적 차단) | 채택됨 |
 | [0015](0015-applicant-side-no-b2b.md) | 지원자 편 원칙 — B2B 채용 평가와 유료 노출 금지 | 채택됨 |
 | [0016](0016-defer-matching.md) | 매칭 기능을 M4 이후로 이연 | 채택됨 |
+| [0017](0017-core-graph-resume-repo-reconciliation.md) | 핵심 흐름 그래프 재구성 — 이력서–저장소 정합 우선 | 제안됨 |
 
 후보(아직 작성 안 함): 프론트엔드(M3).
