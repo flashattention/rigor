@@ -36,7 +36,7 @@ packages = ["app/rigor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["app"]
+pythonpath = ["app", "."]
 addopts = "-q"
 
 [tool.ruff]
