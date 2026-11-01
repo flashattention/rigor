@@ -89,8 +89,8 @@
 |---|---|---|
 | id | str (`r_` + 순번) | |
 | text | str | 원문 span (그대로 인용) |
-| kind | enum `knockout` \| `required` \| `preferred` | knockout = 결격 조건(학위·자격증·근무지·비자·명시적 필수 연차) |
-| knockout_type | enum `degree` \| `certification` \| `experience_years` \| `location` \| `work_authorization` \| `language_cert` \| `other`? | |
+| kind | enum `knockout` \| `required` \| `preferred` | knockout = 결격 조건(학위·자격증·근무지·비자). 연차는 knockout이 아니다(루브릭 §2 [B3]) |
+| knockout_type | enum `degree` \| `certification` \| `location` \| `work_authorization` \| `language_cert` \| `other`? | |
 | competencies | CompetencyId[] | taxonomy 역량 축 |
 | skills | SkillId[] | |
 | min_depth | 0–3? | 필요한 숙련 깊이 (taxonomy §3) |

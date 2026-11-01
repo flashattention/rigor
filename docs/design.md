@@ -30,7 +30,7 @@
 | Fact Verifier, Policy & Safety Checker | — | O | O | — |
 | Resume Tailor | — | — | 선택 | O |
 | 매칭 (Retrieval + Reranker) | — | — | — | 설계 유지, 이연 |
-| 평가 러너, 공정성 테스트 | v0 | CI 게이트 | 운영 trace 연결 | 라벨 확대 |
+| 평가 러너, 공정성 테스트 | v0 | CI 게이트 | 운영 trace 연결 | 실사용 피드백 반영 |
 
 ---
 
