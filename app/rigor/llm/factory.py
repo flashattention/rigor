@@ -36,7 +36,10 @@ def build_client(
     fake: FakeAdapter | None = None,
     recordings_dir: Path = DEFAULT_DIR,
 ) -> LLMClient:
-    """mode: live = 실제 호출 / record = 실제 호출 + 녹화 / replay = 녹화만 (네트워크 없음)."""
+    """mode: live = 실제 호출 / record = 실제 호출 + 녹화 / replay = 녹화만 (네트워크 없음).
+
+    fake 제공자는 mode와 무관하게 FakeAdapter를 쓴다.
+    """
     routing = Routing.load(profile=profile)
     providers = {routing.resolve(t).provider for t in routing.tasks} | {routing.default.provider}
     adapters: dict[str, LLMAdapter] = {}

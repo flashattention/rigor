@@ -20,6 +20,7 @@ _REGEX = re.compile("|".join(f"(?:{p})" for p in _PATTERNS), re.IGNORECASE)
 
 
 def find_injection_lines(text: str) -> list[str]:
+    """의심 줄을 앞뒤 공백을 지워 돌려준다."""
     return [line.strip() for line in text.splitlines() if _REGEX.search(line)]
 
 

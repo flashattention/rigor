@@ -57,6 +57,8 @@ class RepoSignals(StrictModel):
 
 
 class RepoEvidence(StrictModel):
+    """인용할 수 있는 저장소 근거. Citation(kind=repo_evidence)의 ref_id가 이 id를 가리킨다."""
+
     id: str = Field(pattern=r"^e_[A-Za-z0-9_]+$")
     repo_id: int
     path: str | None = None
@@ -66,6 +68,7 @@ class RepoEvidence(StrictModel):
     quote: str | None = None
 
 
+# unverifiable = 저장소로 확인할 수 없는 성격의 주장 (예: 사내 성과). not_found와 구분한다.
 class ClaimResult(StrEnum):
     SUPPORTED = "supported"
     NOT_FOUND = "not_found"
@@ -80,6 +83,8 @@ class CheckMethod(StrEnum):
 
 
 class ClaimCheck(StrictModel):
+    """claim 하나의 대조 결과. supported·contradicted는 근거 인용이 없으면 검증에서 거부된다."""
+
     claim_id: str
     fact_id: str
     claim: str
@@ -96,6 +101,8 @@ class ClaimCheck(StrictModel):
 
 
 class ContributionCaveat(StrEnum):
+    """커밋 기반 기여 집계가 왜곡될 수 있는 사유."""
+
     SQUASH_MERGE = "squash_merge"
     PAIR_PROGRAMMING = "pair_programming"
     BULK_MOVE = "bulk_move"
@@ -167,12 +174,16 @@ class ExposureFinding(StrictModel):
 
 
 class RepoVerdict(StrEnum):
+    """(저장소, 공고) 쌍의 판정: 대표로 쓴다 / 보완한다 / 뺀다."""
+
     SHOWCASE = "showcase"
     IMPROVE = "improve"
     DROP = "drop"
 
 
 class RepoAudit(StrictModel):
+    """저장소 하나의 감사 결과. verdict_for_jd와 rubric_scores는 공고 판정 단계에서 채운다."""
+
     repo_id: int
     full_name: str
     visibility: Literal["public", "private"] = "public"
@@ -205,6 +216,8 @@ class UnlinkedProposal(StrEnum):
 
 
 class UnlinkedItem(StrictModel):
+    """저장소 링크가 없는 fact 하나의 후보(최대 3개)와 사용자 선택, 그에 따른 제안."""
+
     fact_id: str
     candidates: list[RepoCandidate] = Field(default_factory=list, max_length=3)
     user_reason: UnlinkedReason | None = None
@@ -213,6 +226,8 @@ class UnlinkedItem(StrictModel):
 
 
 class Mismatch(StrEnum):
+    """claim 대조 결과에서 나온 이력서·저장소 불일치 유형."""
+
     MISSING_IN_CODE = "missing_in_code"
     METRIC_UNSUPPORTED = "metric_unsupported"
     CONTRIBUTION_OVERSTATED = "contribution_overstated"
@@ -230,6 +245,8 @@ class ReconcileChoice(StrEnum):
 
 
 class ReconciliationDecision(StrictModel):
+    """불일치 하나에 대한 선택. choice는 제시한 선택지 안에서만, revise_to_fact는 수정 문구가 필수다."""
+
     claim_id: str
     mismatch: Mismatch
     options_offered: list[ReconcileChoice] = Field(min_length=1)

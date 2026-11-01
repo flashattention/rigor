@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from rigor.schemas.common import StrictModel
 
 
+# knockout = 결격 조건(학위·자격증·근무지·비자 등). 연차는 여기에 넣지 않는다.
 class RequirementKind(StrEnum):
     KNOCKOUT = "knockout"
     REQUIRED = "required"
@@ -31,6 +32,8 @@ class LegalCheck(StrEnum):
 
 
 class Requirement(StrictModel):
+    """공고 요건 하나. knockout_type은 knockout 요건에만, 그리고 반드시 있어야 한다."""
+
     id: str = Field(pattern=r"^r_[A-Za-z0-9_]+$")
     text: str = Field(min_length=1)  # 원문 span
     kind: RequirementKind
@@ -78,6 +81,8 @@ class ExperienceYears(StrictModel):
 
 
 class JobPosting(StrictModel):
+    """구조화된 공고. 요건은 1개 이상이고 id는 공고 안에서 유일해야 한다."""
+
     id: str
     owner_user_id: str | None = None  # ADR-0005: 붙여넣은 공고는 사용자 범위
     source: JobSource = Field(default_factory=JobSource)
@@ -101,6 +106,7 @@ class JobPosting(StrictModel):
         return self
 
     def requirement(self, req_id: str) -> Requirement:
+        """id로 요건을 찾는다. 없으면 KeyError."""
         for r in self.requirements:
             if r.id == req_id:
                 return r

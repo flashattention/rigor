@@ -44,6 +44,7 @@ class AnthropicAdapter:
         max_tokens = params.pop("max_tokens", 4096)
         messages: list[dict[str, Any]] = []
         for m in request.messages:
+            # Anthropic은 도구 결과를 user 메시지 안의 블록으로 받는다.
             if m.role == "tool":
                 content = [
                     {"type": "tool_result", "tool_use_id": r.call_id, "content": r.content}
@@ -89,6 +90,7 @@ class AnthropicAdapter:
         return ToolTurn(text=text, tool_calls=calls, usage=usage)
 
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
+        """강제한 도구의 입력을 JSON 문자열로 돌려준다. tool_use 블록이 없으면 LLMProviderError."""
         params = dict(request.params)
         max_tokens = params.pop("max_tokens", 4096)
         try:
@@ -123,6 +125,7 @@ class AnthropicAdapter:
 
 
 def _usage(u: Any) -> Usage:
+    """Anthropic의 input_tokens는 캐시분을 이미 뺀 값이다."""
     return Usage(
         input_tokens=getattr(u, "input_tokens", 0) or 0,
         output_tokens=getattr(u, "output_tokens", 0) or 0,
@@ -132,6 +135,7 @@ def _usage(u: Any) -> Usage:
 
 
 def _classify(exc: Exception) -> Exception:
+    """클래스 이름으로 분류한다. 이 모듈은 SDK를 모듈 수준에서 import하지 않는다."""
     if type(exc).__name__ in _TRANSIENT:
         return TransientLLMError(str(exc))
     return LLMProviderError(f"{type(exc).__name__}: {exc}")

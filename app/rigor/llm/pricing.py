@@ -15,6 +15,8 @@ DEFAULT_PATH = Path(__file__).resolve().parents[3] / "configs" / "pricing.yaml"
 
 @dataclass(frozen=True)
 class Tier:
+    """프롬프트 길이별 단가 구간(USD/MTok). max_prompt_tokens가 None이면 상한이 없다."""
+
     max_prompt_tokens: int | None
     input: float
     output: float
@@ -29,6 +31,7 @@ class ModelPrice:
     tokenizer_factor: float = 1.0  # 같은 텍스트에 대한 토큰 증가 배수 (추정용)
 
     def tier_for(self, prompt_tokens: int) -> Tier:
+        """프롬프트 길이가 들어가는 첫 구간. 어디에도 안 들면 마지막 구간."""
         for tier in self.tiers:
             if tier.max_prompt_tokens is None or prompt_tokens <= tier.max_prompt_tokens:
                 return tier

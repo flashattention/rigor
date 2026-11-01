@@ -29,14 +29,17 @@ class Taxonomy:
         return dict(self._alias)
 
     def is_known_skill(self, skill: str) -> bool:
+        """정규 이름 기준이다. 별칭은 normalize_skill로 먼저 바꾼다."""
         return skill in self.skill_competencies
 
     def core_competencies(self, role: str) -> set[str]:
+        """가중치 2 이상(핵심)인 역량. 모르는 직무면 빈 집합."""
         return {c for c, w in self.roles.get(role, {}).items() if w >= 2}
 
 
 @lru_cache(maxsize=4)
 def load_taxonomy(path: Path = DEFAULT_PATH) -> Taxonomy:
+    """경로별로 캐시해 같은 객체를 공유한다. 정규 이름도 별칭 표에 넣는다."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     alias: dict[str, str] = {}
     skill_comp: dict[str, tuple[str, ...]] = {}

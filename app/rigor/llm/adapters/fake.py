@@ -54,6 +54,10 @@ class FakeAdapter:
         return turn
 
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
+        """큐를 먼저 쓰고, 비었으면 handler를 쓴다. 둘 다 없으면 AssertionError.
+
+        사용량은 글자 수 / 4로 근사한다.
+        """
         self.requests.append(request)
         queue = self._queues.get(request.task)
         if queue:

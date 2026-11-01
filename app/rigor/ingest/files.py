@@ -40,6 +40,8 @@ class IngestError(ValueError):
 
 @dataclass
 class ExtractedText:
+    """추출 결과. needs_ocr이면 text는 비었거나 불완전하다."""
+
     format: FileFormat
     text: str
     pages: int = 1
@@ -48,6 +50,10 @@ class ExtractedText:
 
 
 def detect_format(data: bytes) -> FileFormat:
+    """매직 바이트로 형식을 판정한다. 지원하지 않는 형식이면 IngestError.
+
+    PDF는 항상 PDF_TEXT로 돌려준다. 스캔 여부는 본문을 읽은 _extract_pdf가 정한다.
+    """
     if data.startswith(b"%PDF-"):
         return FileFormat.PDF_TEXT
     if data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
@@ -71,6 +77,10 @@ def detect_format(data: bytes) -> FileFormat:
 
 
 def extract_text(data: bytes) -> ExtractedText:
+    """거절은 IngestError로 올린다.
+
+    OCR 대상은 예외 없이 needs_ocr=True로 돌려주므로 호출자가 확인해야 한다.
+    """
     if len(data) > MAX_BYTES:
         raise IngestError(f"파일이 너무 큽니다 (최대 {MAX_BYTES // (1024 * 1024)}MB).")
     if not data.strip():
@@ -104,6 +114,7 @@ def _decode_text(data: bytes) -> str:
 
 
 def _extract_pdf(data: bytes) -> ExtractedText:
+    """본문이 쪽당 MIN_CHARS_PER_PAGE보다 적으면 PDF_SCAN으로 돌려준다."""
     from pypdf import PdfReader
     from pypdf.errors import PdfReadError
 
@@ -130,7 +141,9 @@ def _extract_pdf(data: bytes) -> ExtractedText:
 
 
 def _extract_docx(data: bytes) -> str:
+    """본문(word/document.xml)만 읽는다. 머리글·바닥글·각주는 빠진다."""
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        # 압축을 풀기 전에 막는다. 크기는 ZIP 헤더에 선언된 값이다.
         total = sum(i.file_size for i in zf.infolist())
         if total > MAX_UNZIPPED_BYTES:
             raise IngestError("압축 해제 크기가 너무 큽니다.")

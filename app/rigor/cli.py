@@ -300,6 +300,7 @@ def diagnose(
         jd_text = jd.read_text(encoding="utf-8")
         snaps = {}
         for i, path in enumerate(repo, start=1):
+            # 로컬 저장소에는 GitHub id가 없다. 음수로 두어 실제 id와 겹치지 않게 한다.
             meta = RepoMeta(repo_id=-i, full_name=f"{login or 'local'}/{path.resolve().name}")
             snaps[meta.repo_id] = snapshot_local(path, meta)
         if github_repo:

@@ -36,8 +36,10 @@ class OpenAIAdapter:
         self.client = client
 
     def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        """도구 턴 한 번. 인자가 깨진 호출은 예외 없이 invalid_arguments=True로 돌려준다."""
         messages: list[dict[str, Any]] = [{"role": "system", "content": request.system}]
         for m in request.messages:
+            # OpenAI는 도구 결과를 호출마다 별도 메시지로 받는다.
             if m.role == "tool":
                 messages += [
                     {"role": "tool", "tool_call_id": r.call_id, "content": r.content}
@@ -132,6 +134,7 @@ class OpenAIAdapter:
 
 
 def _usage(u: Any) -> Usage:
+    """OpenAI의 prompt_tokens는 캐시분을 포함하므로 빼서 Usage 정의에 맞춘다."""
     details = getattr(u, "prompt_tokens_details", None)
     cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
     return Usage(
@@ -142,6 +145,7 @@ def _usage(u: Any) -> Usage:
 
 
 def _classify(exc: Exception) -> Exception:
+    """클래스 이름으로 분류한다. 이 모듈은 SDK를 모듈 수준에서 import하지 않는다."""
     if type(exc).__name__ in _TRANSIENT:
         return TransientLLMError(str(exc))
     return LLMProviderError(f"{type(exc).__name__}: {exc}")

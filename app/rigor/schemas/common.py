@@ -28,6 +28,8 @@ class DraftModel(BaseModel):
 
 
 class Citation(StrictModel):
+    """근거 한 건. ref_id는 kind에 따라 Requirement·Fact·RepoEvidence의 id를 가리킨다."""
+
     kind: Literal["requirement", "fact", "repo_evidence"]
     ref_id: str = Field(min_length=1)
     quote: str | None = None

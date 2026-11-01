@@ -27,6 +27,11 @@ DEFAULT_DIR = Path(__file__).resolve().parents[4] / "evals" / "recordings"
 
 
 def recording_key(request: LLMRequest) -> str:
+    """구조화 호출의 녹화 키.
+
+    json_schema에는 Pydantic 클래스 docstring이 description으로 들어간다.
+    LLM 스키마 클래스의 docstring을 고치면 키가 바뀌어 다시 녹화해야 한다.
+    """
     blob = json.dumps(
         {
             "task": request.task,
@@ -44,11 +49,14 @@ def recording_key(request: LLMRequest) -> str:
 
 
 def tool_recording_key(request: ToolRequest) -> str:
+    """도구 턴의 녹화 키. 대화 기록이 들어가므로 앞 턴이 달라지면 뒤 턴 녹화도 찾지 못한다."""
     blob = json.dumps(asdict(request), sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
 class RecordedAdapter:
+    """replay는 디스크만 읽고, record는 inner를 호출한 뒤 같은 키의 파일을 덮어쓴다."""
+
     def __init__(
         self,
         provider: str,

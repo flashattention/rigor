@@ -62,6 +62,8 @@ from rigor.schemas.repo import (
 
 @dataclass
 class Choosers:
+    """사용자 선택 주입점. reconcile·can_explain의 기본값은 비대화형 동작이다."""
+
     unlinked: Chooser
     reconcile: ReconcileChooser = default_choice
     can_explain: ExplainChooser = lambda _f: True
@@ -69,6 +71,8 @@ class Choosers:
 
 @dataclass
 class ResumeAction:
+    """fact 하나를 이력서에서 어떻게 다룰지에 대한 제안."""
+
     fact_id: str
     content: str
     action: str
@@ -76,6 +80,8 @@ class ResumeAction:
 
 @dataclass
 class DiagnosisReport:
+    """한 공고에 대한 실행 결과 전체. 리포트 렌더러의 입력이다."""
+
     job: JobPosting
     profile: Profile  # B단계 후 (링크 반영)
     evidence_profile: Profile  # D단계 후 (판정 근거)
@@ -109,6 +115,10 @@ def run_pipeline(
     choosers: Choosers,
     today: date | None = None,
 ) -> DiagnosisReport:
+    """B→F를 실행한다. 커밋 신원이 확인되지 않았으면(A6 전) ValueError.
+
+    입력 profile은 고치지 않는다. 단계별 결과는 report의 profile·evidence_profile에 담긴다.
+    """
     identity = profile.identity
     if identity is None:
         raise ValueError("commit identity must be confirmed before stage B (A6)")
@@ -159,6 +169,7 @@ def run_pipeline(
         audits[j.repo_id] = audits[j.repo_id].model_copy(
             update={"verdict_for_jd": j.verdict, "rubric_scores": j.scores}
         )
+    # 등급의 대표 저장소 근거와 약점·개선 항목은 이력서에 연결된 저장소로 한정한다.
     linked_ids = {f.repo_link.repo_id for f in profile.facts if f.repo_link and f.repo_link.repo_id}
     linked_judgements = [j for j in judgements if j.repo_id in linked_ids]
     showcase_reqs = {
@@ -242,6 +253,10 @@ def run_pipeline(
 def _resume_actions(
     profile: Profile, judgements: list[RepoJudgement], unlinked: list[UnlinkedItem]
 ) -> list[ResumeAction]:
+    """E7: fact별 이력서 배치 제안. 저장소 판정 순으로 정렬한다.
+
+    저장소가 없는 fact는 improve 순위로 들어가고, 판정도 제안도 없는 fact는 빠진다.
+    """
     by_repo = {j.repo_id: j for j in judgements}
     proposals = {u.fact_id: u.proposal for u in unlinked}
     label = {

@@ -51,6 +51,7 @@ class Routing:
         self.tasks = tasks
 
     def resolve(self, task: str) -> Route:
+        """task 전용 경로가 없으면 default. KNOWN_TASKS에 없는 task는 KeyError."""
         if task not in KNOWN_TASKS:
             raise KeyError(f"unknown task: {task}")
         return self.tasks.get(task, self.default)
@@ -64,6 +65,10 @@ class Routing:
 
     @classmethod
     def load(cls, path: Path | None = None, profile: str | None = None) -> Routing:
+        """프로필 우선순위: 인자 > RIGOR_ROUTING_PROFILE > 파일의 active.
+
+        task 설정은 default 위에 얕게 병합한다. params를 적으면 default의 params를 통째로 대체한다.
+        """
         data = yaml.safe_load((path or DEFAULT_PATH).read_text(encoding="utf-8"))
         name = profile or os.environ.get(PROFILE_ENV) or data["active"]
         try:

@@ -104,7 +104,7 @@ class ToolTurn:
     text: str
     tool_calls: tuple[ToolCall, ...]
     usage: Usage
-    cost_usd: float = 0.0
+    cost_usd: float = 0.0  # 어댑터는 비워 두고 LLMClient가 채운다
 
 
 class LLMAdapter(Protocol):
@@ -147,6 +147,8 @@ class StructuredOutputError(LLMError):
 
 
 class BudgetExceeded(LLMError):
+    """누적 비용이 상한에 닿아 호출 전에 멈춤. 재시도 대상이 아니다."""
+
     pass
 
 

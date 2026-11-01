@@ -18,6 +18,8 @@ class VerdictStatus(StrEnum):
 
 
 class RequirementVerdict(StrictModel):
+    """요건 하나의 판정. met·partial은 인용이 없으면 검증에서 거부된다."""
+
     requirement_id: str
     status: VerdictStatus
     citations: list[Citation] = Field(default_factory=list)
@@ -65,6 +67,8 @@ class Weakness(StrictModel):
 
 
 class Redirect(StrictModel):
+    """지금 근거로 더 강한 다른 직무를 제안한다."""
+
     role_id: str
     reason: str
     citations: Citations
@@ -76,11 +80,15 @@ class Alternative(StrictModel):
 
 
 class GradeTrace(StrictModel):
+    """등급을 낸 규칙과 그 입력. 등급은 LLM이 아니라 규칙이 계산한다."""
+
     rule_id: str = Field(pattern=r"^G[0-9]+$")
     inputs: dict[str, float | int | str]
 
 
 class Diagnosis(StrictModel):
+    """공고 하나에 대한 진단. not_recommended면 대안 경로가 없을 때 검증에서 거부된다."""
+
     grade: Grade
     grade_trace: GradeTrace
     verdicts: list[RequirementVerdict]
@@ -104,6 +112,8 @@ class RoadmapKind(StrEnum):
 
 
 class RoadmapItem(StrictModel):
+    """새 프로젝트 또는 기존 저장소 개선 항목. improve_repo는 repo_id가 필수다."""
+
     kind: RoadmapKind
     title: str
     problem: str

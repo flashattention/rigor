@@ -37,6 +37,8 @@ _LATIN_NAME_LINE = re.compile(r"^\s*([A-Z][a-z]+(?: [A-Z][a-z]+){1,2})\s*$")
 
 @dataclass
 class MaskResult:
+    """마스킹 결과. [SCHOOL]·[MASKED]·[REDACTED]는 mapping에 없어 unmask로 복원되지 않는다."""
+
     text: str
     mapping: dict[str, str] = field(default_factory=dict)  # 토큰 → 원래 값
     repo_urls: dict[str, str] = field(default_factory=dict)  # [REPO_n] → https://github.com/o/r
@@ -62,7 +64,10 @@ def detect_name(text: str) -> str | None:
 def mask_pii(
     text: str, known_names: list[str] | None = None, extra_terms: list[str] | None = None
 ) -> MaskResult:
-    """extra_terms: 패턴으로 못 잡는 식별어 (예: 대회명 속 학교 약칭). 사용자가 지정한다."""
+    """extra_terms: 패턴으로 못 잡는 식별어 (예: 대회명 속 학교 약칭). 사용자가 지정한다.
+
+    known_names가 없으면 detect_name으로 첫 줄에서 이름을 추정한다.
+    """
     result = MaskResult(text="")
     kept = []
     for line in text.splitlines():
@@ -78,11 +83,13 @@ def mask_pii(
     names = [n for n in (known_names or []) if n]
     if not names and (detected := detect_name(text)):
         names = [detected]
+    # 긴 이름부터 바꾼다. 짧은 이름이 긴 이름의 일부만 지우면 나머지가 남는다.
     for name in sorted(set(names), key=len, reverse=True):
         masked = masked.replace(name, "[NAME]")
         result.mapping["[NAME]"] = name
 
     counters: dict[str, int] = {}
+    # 같은 값은 같은 토큰으로 바꿔 LLM이 동일 대상임을 알 수 있게 한다.
     seen: dict[str, str] = {}
 
     def token_for(kind: str, value: str) -> str:

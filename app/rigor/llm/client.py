@@ -60,6 +60,11 @@ class LLMClient:
         messages: Sequence[Mapping[str, str]],
         schema: type[T],
     ) -> LLMResult[T]:
+        """schema로 검증한 결과를 돌려준다. usage·cost_usd는 재요청까지 합산한 값이다.
+
+        재요청 후에도 검증에 실패하면 StructuredOutputError, 출력이 잘리면 TruncatedOutputError,
+        예산을 다 썼으면 BudgetExceeded.
+        """
         route = self.routing.resolve(task)
         try:
             adapter = self.adapters[route.provider]
@@ -142,6 +147,7 @@ class LLMClient:
     def _complete_with_retry(
         self, adapter: LLMAdapter, request: LLMRequest
     ) -> tuple[str, Usage, int]:
+        """출력, 사용량, 시도 횟수를 돌려준다. 시도 횟수에는 일시 오류 재시도가 포함된다."""
         attempts = 0
 
         def call() -> tuple[str, Usage]:
@@ -153,6 +159,7 @@ class LLMClient:
         return raw, usage, attempts
 
     def _retry[R](self, call: Callable[[], R]) -> R:
+        """일시 오류만 지수 백오프와 지터로 재시도한다. 시도마다 먼저 예산을 확인한다."""
         for attempt in range(self.max_transient_retries + 1):
             self.meter.check()
             try:
@@ -166,6 +173,7 @@ class LLMClient:
 
 
 def _repair_turn(raw: str, err: ValidationError) -> tuple[dict[str, str], ...]:
+    """직전 출력과 검증 오류(최대 10개)를 대화에 덧붙일 재요청 턴을 만든다."""
     problems = "; ".join(
         f"{'.'.join(str(p) for p in e['loc']) or '(root)'}: {e['msg']}" for e in err.errors()[:10]
     )

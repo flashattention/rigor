@@ -24,6 +24,7 @@ class FactCategory(StrEnum):
     SKILL = "skill"
 
 
+# 성과가 본인 기여인지 팀 성과인지 구분한다.
 class Attribution(StrEnum):
     INDIVIDUAL = "individual"
     TEAM = "team"
@@ -31,6 +32,8 @@ class Attribution(StrEnum):
 
 
 class Implementation(StrEnum):
+    """자기 신고한 구현 방식. 등급 입력이 아니라 정합 선택지와 면접 준비 카드에만 쓴다."""
+
     HAND_WRITTEN = "hand_written"
     AI_ASSISTED = "ai_assisted"
     MOSTLY_AI = "mostly_ai"
@@ -38,6 +41,8 @@ class Implementation(StrEnum):
 
 
 class FactStatus(StrEnum):
+    """사용자 확인·정합 결과. 판정 근거로는 confirmed와 revised만 쓴다."""
+
     CONFIRMED = "confirmed"
     UNCONFIRMED = "unconfirmed"
     REVISED = "revised"  # 정합(D)에서 사실에 맞게 고침
@@ -59,6 +64,8 @@ class ClaimType(StrEnum):
 
 
 class UnlinkedReason(StrEnum):
+    """이력서 항목에 저장소 링크가 없는 이유. 사용자가 고른다."""
+
     NO_REPO = "no_repo"
     LOW_QUALITY = "low_quality"
     FORGOT = "forgot"
@@ -99,6 +106,7 @@ class Metric(StrictModel):
     evidence_url: str | None = None
 
 
+# 학력 판정에는 이 값만 쓴다. 학교명은 Fact.organization에만 남는다.
 class EducationNormalized(StrictModel):
     degree: Degree
     field: str | None = None
@@ -106,12 +114,16 @@ class EducationNormalized(StrictModel):
 
 
 class RepoLink(StrictModel):
+    """저장소 연결(B) 결과. unlinked_reason은 링크가 없던 이유로, 후보를 골라 연결해도 남는다."""
+
     repo_id: int | None = None
     url: str | None = None
     unlinked_reason: UnlinkedReason | None = None
 
 
 class Claim(StrictModel):
+    """fact에서 뽑은 원자 주장. 저장소와 대조하는 단위다."""
+
     id: str = Field(pattern=r"^c_[A-Za-z0-9_]+$")
     fact_id: str
     type: ClaimType
@@ -121,6 +133,8 @@ class Claim(StrictModel):
 
 
 class Fact(StrictModel):
+    """프로필의 사실 1건. claims는 모두 이 fact 소속이어야 한다."""
+
     id: str = Field(pattern=r"^f_[A-Za-z0-9_]+$")
     category: FactCategory
     content: str = Field(min_length=1)
@@ -149,6 +163,8 @@ class Fact(StrictModel):
 
 
 class CommitIdentity(StrictModel):
+    """어떤 커밋을 사용자 것으로 셀지 정하는 기준 (A6)."""
+
     github_login: str
     emails: list[str] = Field(default_factory=list)
     name_aliases: list[str] = Field(default_factory=list)
