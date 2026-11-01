@@ -1,17 +1,20 @@
-"""에이전트 루프: 주장 하나를 저장소에서 검증한다. **이 파일은 사용자가 직접 구현한다** (ADR-0020).
+"""에이전트 루프: 주장 하나를 저장소에서 검증한다 (ADR-0020). 명세는 tests/agent/test_loop.py.
 
-명세는 tests/agent/test_loop.py다. 구현하면 그 테스트들이 통과해야 한다.
-도구(tools.py), 판정 검증(verdict.py), LLM 호출(client.tool_turn)은 이미 있다.
+모델이 다음 도구를 고르고, 코드는 실행해서 결과를 돌려준다. 예산은 호출 전에 검사하고,
+판정은 verdict.py가 코드로 검증한다.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from rigor.agent.tools import RepoWorkspace
-from rigor.agent.verdict import CheckedVerdict
+from rigor.agent.tools import SUBMIT, TOOLS, RepoWorkspace, execute_tool
+from rigor.agent.verdict import CheckedVerdict, check_submission
 from rigor.llm.client import LLMClient
+from rigor.llm.types import AgentMessage, ToolResult
+from rigor.prompts import data_block, load_prompt
 from rigor.schemas.profile import Claim
+from rigor.schemas.repo import ClaimResult
 
 TASK = "claim_verify"
 
@@ -37,14 +40,54 @@ class AgentOutcome:
 def verify_claim(
     client: LLMClient, claim: Claim, ws: RepoWorkspace, budget: AgentBudget = AgentBudget()
 ) -> AgentOutcome:
-    """모델이 도구를 고르고, 코드가 실행해 결과를 돌려주는 루프.
+    """모델이 도구를 고르고, 코드가 실행해 결과를 돌려주는 루프."""
 
-    구현할 내용:
-    1. load_prompt(TASK)를 시스템 프롬프트로, 주장을 data_block("claim", ...)에 담아 첫 메시지로.
-    2. 매 턴 client.tool_turn(TASK, system=..., messages=..., tools=TOOLS)를 부른다.
-    3. 응답의 tool_calls 중 SUBMIT이 있으면 check_submission으로 검증하고 끝낸다.
-    4. 아니면 execute_tool로 실행해 assistant 메시지와 tool 결과 메시지를 기록에 덧붙인다.
-    5. 도구를 부르지 않고 글로만 답하면 끝낸다 (unverifiable, no_tool_call).
-    6. max_steps나 max_prompt_tokens에 닿으면 끝낸다 (unverifiable).
-    """
-    raise NotImplementedError("사용자가 직접 구현: tests/agent/test_loop.py 참고")
+    system = load_prompt(TASK).text
+    messages = [AgentMessage("user", text=data_block("claim", claim.text))]
+    steps, prompt_tokens, cost_usd = 0, 0, 0.0
+
+    def finish(verdict, reason):
+        return AgentOutcome(
+            verdict=verdict,
+            steps=steps,
+            prompt_tokens=prompt_tokens,
+            cost_usd=cost_usd,
+            stop_reason=reason,
+            files_opened=sorted(ws.opened),
+        )
+
+    while True:
+        if steps >= budget.max_steps:
+            return finish(
+                CheckedVerdict(ClaimResult.UNVERIFIABLE, "조사 횟수 상한에 도달해 판단하지 못함"),
+                "max_steps",
+            )
+        if prompt_tokens >= budget.max_prompt_tokens:
+            return finish(
+                CheckedVerdict(ClaimResult.UNVERIFIABLE, "프롬프트 토큰 예산 소모"), "token_budget"
+            )
+
+        turn = client.tool_turn(TASK, system=system, messages=messages, tools=TOOLS)
+
+        steps += 1
+        prompt_tokens += turn.usage.prompt_tokens
+        cost_usd += turn.cost_usd
+
+        if turn.tool_calls == ():
+            return finish(
+                CheckedVerdict(ClaimResult.UNVERIFIABLE, "도구 호출 없음"), "no_tool_call"
+            )
+
+        for call in turn.tool_calls:
+            if call.name == SUBMIT:
+                verdict = check_submission(ws, call.arguments)
+                return finish(verdict, "submitted")
+
+        messages.append(AgentMessage("assistant", text=turn.text, tool_calls=turn.tool_calls))
+
+        results = []
+        for call in turn.tool_calls:
+            output = execute_tool(ws, call)
+            results.append(ToolResult(call.id, call.name, output))
+
+        messages.append(AgentMessage("tool", results=tuple(results)))

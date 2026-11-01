@@ -1,9 +1,4 @@
-"""에이전트 루프의 명세. app/rigor/agent/loop.py의 verify_claim을 구현하면 전부 통과해야 한다.
-
-모델 응답을 FakeAdapter 큐로 고정하므로 네트워크도 비용도 없다. 구현하기 전에는 xfail로 표시된다.
-"""
-
-import pytest
+"""에이전트 루프의 명세. 모델 응답을 FakeAdapter 큐로 고정하므로 네트워크도 비용도 없다."""
 
 from rigor.agent.loop import AgentBudget, verify_claim
 from rigor.agent.tools import RepoWorkspace
@@ -16,8 +11,6 @@ from rigor.llm.routing import Route, Routing
 from rigor.llm.types import ToolCall, ToolTurn, Usage
 from rigor.schemas.profile import Claim, ClaimType
 from rigor.schemas.repo import ClaimResult
-
-pytestmark = pytest.mark.xfail(raises=NotImplementedError, reason="사용자가 직접 구현 (ADR-0020)")
 
 TASK = "claim_verify"
 CLAIM = Claim(id="c_1", fact_id="f_1", type=ClaimType.FEATURE, text="FAISS로 벡터 검색 구현")
@@ -103,6 +96,8 @@ def test_answering_without_a_tool_ends_as_unverifiable():
     out, _ = run([ToolTurn("확인됐습니다. 믿어 주세요.", (), USE)])
     assert out.stop_reason == "no_tool_call"
     assert out.verdict.result is ClaimResult.UNVERIFIABLE
+    # 모델을 부른 순간 비용이 발생한다. 글로만 답한 마지막 턴도 집계되어야 한다
+    assert out.steps == 1 and out.prompt_tokens == 100
 
 
 def test_a_bad_tool_call_becomes_an_observation_and_the_loop_continues():
