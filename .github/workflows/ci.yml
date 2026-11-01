@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install uv
+      - run: uv sync --all-extras --locked
+      # 테스트는 네트워크·실제 LLM 없이 돈다. API 키를 CI에 두지 않는다.
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
