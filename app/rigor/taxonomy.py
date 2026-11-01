@@ -24,6 +24,10 @@ class Taxonomy:
         key = raw.strip().lower()
         return self._alias.get(key, key.replace(" ", "_"))
 
+    def aliases(self) -> dict[str, str]:
+        """소문자 별칭 → 정규 이름."""
+        return dict(self._alias)
+
     def is_known_skill(self, skill: str) -> bool:
         return skill in self.skill_competencies
 
