@@ -212,6 +212,159 @@ def prepare(
     typer.echo(f"저장: {out}  (LLM 비용 ${client.meter.total_usd:.4f})")
 
 
+@app.command()
+def diagnose(
+    out: Path = typer.Option(..., help="리포트 Markdown 경로"),
+    synth_case: str | None = typer.Option(None, help="합성 케이스로 시연 (예: A_agent_strong)"),
+    use_truth_profile: bool = typer.Option(
+        False, help="합성 케이스: A단계 대신 정답 프로필로 시작"
+    ),
+    resume: Path | None = typer.Option(None, exists=True, help="이력서 파일"),
+    jd: Path | None = typer.Option(None, exists=True, help="공고 텍스트 파일"),
+    repo: list[Path] = typer.Option([], help="로컬 git 저장소 경로 (여러 번 지정 가능)"),
+    github_repo: list[str] = typer.Option([], help="공개 GitHub 저장소 owner/name (여러 번)"),
+    login: str = typer.Option("", help="GitHub 로그인 (커밋 신원 기준)"),
+    email: list[str] = typer.Option([], help="본인 커밋 이메일 (여러 번)"),
+    profile: str | None = typer.Option(None, help="라우팅 프로필"),
+    mode: str = typer.Option("replay", help="live | record | replay"),
+    max_usd: float = typer.Option(0.10, help="LLM 비용 상한 (USD)"),
+    yes: bool = typer.Option(False, "--yes", help="모든 선택을 기본값으로 (비대화형)"),
+) -> None:
+    """핵심 흐름 전체: 공고 + 이력서 + GitHub → 적합도 등급 + 프로젝트 선택·개선 리포트."""
+    import tempfile
+
+    from rigor.github_audit.exposure import ExposureContext
+    from rigor.github_audit.local_source import snapshot_local
+    from rigor.github_audit.snapshot import RepoMeta
+    from rigor.ingest.files import extract_text
+    from rigor.ingest.privacy import mask_pii
+    from rigor.llm.factory import build_client
+    from rigor.nodes.jd_parser import parse_jd
+    from rigor.nodes.profile_builder import confirm_facts, extract_profile
+    from rigor.pipeline import Choosers, run_pipeline
+    from rigor.report.markdown import render_markdown
+    from rigor.schemas.profile import CommitIdentity, FactCategory, FactStatus, UnlinkedReason
+    from rigor.schemas.repo import ReconcileChoice
+
+    _load_dotenv()
+    client = build_client(profile=profile, mode=mode, max_usd=max_usd)  # type: ignore[arg-type]
+    tmp = Path(tempfile.mkdtemp(prefix="rigor-"))
+
+    if synth_case:
+        from rigor.synth.cases import base_cases
+        from rigor.synth.harness import exposure_context, profile_after_stage_a, snapshots
+        from rigor.synth.render import render_jd, render_resume
+        from rigor.synth.variants import all_variants
+
+        base = base_cases()
+        case = next((c for c in base + all_variants(base) if c.case_id == synth_case), None)
+        if case is None:
+            typer.echo(f"unknown case: {synth_case}")
+            raise typer.Exit(code=1)
+        if client.routing.default.provider == "fake":
+            from rigor.synth.oracle import oracle_adapter
+
+            client.adapters["fake"] = oracle_adapter(case, mask_pii(render_resume(case)))
+            typer.echo("fake 프로필: 합성 정답 오라클로 실행 (LLM 품질이 아니라 배선 시연)")
+        snaps = snapshots(case, tmp)
+        exposure = exposure_context(case)
+        identity = case.profile.identity
+        resume_text, jd_text = render_resume(case), render_jd(case)
+        truth_profile = profile_after_stage_a(case) if use_truth_profile else None
+    else:
+        if not (resume and jd and (repo or github_repo)):
+            typer.echo("--resume, --jd, 그리고 --repo 또는 --github-repo가 필요합니다.")
+            raise typer.Exit(code=1)
+        resume_text = extract_text(resume.read_bytes()).text
+        jd_text = jd.read_text(encoding="utf-8")
+        snaps = {}
+        for i, path in enumerate(repo, start=1):
+            meta = RepoMeta(repo_id=-i, full_name=f"{login or 'local'}/{path.resolve().name}")
+            snaps[meta.repo_id] = snapshot_local(path, meta)
+        if github_repo:
+            from rigor.github_audit.api_source import GitHubSource
+
+            source = GitHubSource()
+            for full in github_repo:
+                snap = source.snapshot(full)
+                snaps[snap.meta.repo_id] = snap
+        identity = CommitIdentity(
+            github_login=login, emails=[e.lower() for e in email], confirmed_by_user=True
+        )
+        truth_profile = None
+        exposure = None
+
+    mask = mask_pii(resume_text)
+    if exposure is None:
+        exposure = ExposureContext(
+            names=[v for k, v in mask.mapping.items() if k == "[NAME]"],
+            phones=[v for k, v in mask.mapping.items() if k.startswith("[PHONE")],
+            emails=[v for k, v in mask.mapping.items() if k.startswith("[EMAIL")],
+        )
+    if truth_profile is not None:
+        prof = truth_profile
+    else:
+        extraction = extract_profile(client, mask, "p_cli")
+        prof = confirm_facts(
+            extraction,
+            lambda f, u: (
+                FactStatus.CONFIRMED
+                if yes or typer.confirm(f"[{f.id}] {f.content} — 사실과 맞습니까?", default=True)
+                else FactStatus.REJECTED
+            ),
+        )
+        prof = prof.model_copy(update={"identity": identity})
+    job = parse_jd(client, jd_text, "j_cli").job
+
+    def choose_unlinked(fact, item):
+        top = item.candidates[0] if item.candidates else None
+        if yes:
+            if top and top.score >= 0.6:
+                return UnlinkedReason.FORGOT, top.repo_id
+            if fact.category is FactCategory.EXPERIENCE:
+                return UnlinkedReason.PRIVATE_OR_COMPANY, None
+            return UnlinkedReason.NO_REPO, None
+        typer.echo(f"\n[{fact.id}] {fact.content}: 이력서에 저장소가 없습니다.")
+        for i, c in enumerate(item.candidates):
+            typer.echo(f"  후보 {i}: {c.full_name} (점수 {c.score}, {'; '.join(c.reasons)})")
+        reasons = list(UnlinkedReason)
+        for i, r in enumerate(reasons):
+            typer.echo(f"  ({i}) {r.value}")
+        reason = reasons[int(typer.prompt("사유 번호", default="0"))]
+        repo_id = None
+        if reason in (UnlinkedReason.FORGOT, UnlinkedReason.LOW_QUALITY) and item.candidates:
+            repo_id = item.candidates[int(typer.prompt("후보 번호", default="0"))].repo_id
+        return reason, repo_id
+
+    def choose_reconcile(item):
+        if yes:
+            return ReconcileChoice.REVISE_TO_FACT, item.suggestion
+        typer.echo(f"\n불일치: {item.claim.text} ({item.mismatch.value})")
+        typer.echo(f"  수정 제안: {item.suggestion}")
+        for i, o in enumerate(item.options):
+            typer.echo(f"  ({i}) {o.value}")
+        choice = item.options[int(typer.prompt("선택 번호", default="0"))]
+        return choice, item.suggestion
+
+    choosers = Choosers(
+        unlinked=choose_unlinked,
+        reconcile=choose_reconcile,
+        can_explain=lambda f: (
+            yes
+            or typer.confirm(
+                f"'{f.content}'의 설계 결정과 검증 방법을 면접에서 설명할 수 있습니까?",
+                default=True,
+            )
+        ),
+    )
+    report = run_pipeline(prof, job, snaps, client, exposure, choosers)
+    out.write_text(render_markdown(report), encoding="utf-8")
+    typer.echo(
+        f"등급: {report.diagnosis.grade.value} ({report.diagnosis.grade_trace.rule_id}) → {out}"
+        f"  (LLM 비용 ${client.meter.total_usd:.4f})"
+    )
+
+
 def confirm_spend(usd: float, yes: bool) -> None:
     """실제 호출 평가 전 확인. --yes 없이 비용이 드는 실행은 하지 않는다."""
     if usd <= 0 or yes:

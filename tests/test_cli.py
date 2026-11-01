@@ -38,3 +38,22 @@ def test_synth_list_and_build(tmp_path):
     assert built.exit_code == 0, built.output
     assert (out / "resume.txt").exists() and (out / "truth.json").exists()
     assert (out / "repos" / "synth-user-e" / "todo-api" / ".git").is_dir()
+
+
+def test_diagnose_synth_case_with_oracle(tmp_path):
+    out = tmp_path / "report.md"
+    result = runner.invoke(
+        app,
+        [
+            "diagnose",
+            "--synth-case",
+            "C_knockout_degree",
+            "--use-truth-profile",
+            "--yes",
+            "--out",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "not_recommended (G1)" in result.output
+    assert "비추천" in out.read_text()
