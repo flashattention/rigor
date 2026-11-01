@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from rigor.llm.types import (
     LLMProviderError,
     LLMRequest,
+    ToolCall,
+    ToolRequest,
+    ToolTurn,
     TransientLLMError,
     TruncatedOutputError,
     Usage,
@@ -31,6 +35,69 @@ class OpenAIAdapter:
             client = OpenAI(timeout=timeout_s, max_retries=0)
         self.client = client
 
+    def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        messages: list[dict[str, Any]] = [{"role": "system", "content": request.system}]
+        for m in request.messages:
+            if m.role == "tool":
+                messages += [
+                    {"role": "tool", "tool_call_id": r.call_id, "content": r.content}
+                    for r in m.results
+                ]
+            elif m.tool_calls:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": m.text or None,
+                        "tool_calls": [
+                            {
+                                "id": c.id,
+                                "type": "function",
+                                "function": {
+                                    "name": c.name,
+                                    "arguments": json.dumps(c.arguments, ensure_ascii=False),
+                                },
+                            }
+                            for c in m.tool_calls
+                        ],
+                    }
+                )
+            else:
+                messages.append({"role": m.role, "content": m.text})
+        try:
+            resp = self.client.chat.completions.create(
+                model=request.model,
+                messages=messages,
+                tools=[
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.input_schema,
+                        },
+                    }
+                    for t in request.tools
+                ],
+                **request.params,
+            )
+        except Exception as exc:
+            raise _classify(exc) from exc
+        choice = resp.choices[0]
+        usage = _usage(resp.usage)
+        if getattr(choice, "finish_reason", None) == "length":
+            raise TruncatedOutputError(
+                f"tool turn truncated at {usage.output_tokens} tokens", usage
+            )
+        calls = []
+        for c in choice.message.tool_calls or []:
+            try:
+                calls.append(
+                    ToolCall(c.id, c.function.name, json.loads(c.function.arguments or "{}"))
+                )
+            except json.JSONDecodeError:
+                calls.append(ToolCall(c.id, c.function.name, invalid_arguments=True))
+        return ToolTurn(text=choice.message.content or "", tool_calls=tuple(calls), usage=usage)
+
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
         try:
             resp = self.client.chat.completions.create(
@@ -51,13 +118,7 @@ class OpenAIAdapter:
         choice = resp.choices[0]
         text = choice.message.content or ""
         u = resp.usage
-        details = getattr(u, "prompt_tokens_details", None)
-        cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
-        usage = Usage(
-            input_tokens=u.prompt_tokens - cached,
-            output_tokens=u.completion_tokens,
-            cache_read_tokens=cached,
-        )
+        usage = _usage(u)
         if getattr(choice, "finish_reason", None) == "length":
             reasoning = getattr(
                 getattr(u, "completion_tokens_details", None), "reasoning_tokens", 0
@@ -68,6 +129,16 @@ class OpenAIAdapter:
                 usage,
             )
         return text, usage
+
+
+def _usage(u: Any) -> Usage:
+    details = getattr(u, "prompt_tokens_details", None)
+    cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
+    return Usage(
+        input_tokens=u.prompt_tokens - cached,
+        output_tokens=u.completion_tokens,
+        cache_read_tokens=cached,
+    )
 
 
 def _classify(exc: Exception) -> Exception:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -53,8 +53,66 @@ class LLMResult[T: BaseModel]:
     attempts: int
 
 
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    """모델이 고른 도구 호출. arguments가 올바른 JSON이 아니면 invalid_arguments=True."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any] = field(default_factory=dict)
+    invalid_arguments: bool = False
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    call_id: str
+    name: str
+    content: str
+
+
+@dataclass(frozen=True)
+class AgentMessage:
+    """제공자와 무관한 대화 기록. 형식 변환은 어댑터가 한다."""
+
+    role: Literal["user", "assistant", "tool"]
+    text: str = ""
+    tool_calls: tuple[ToolCall, ...] = ()
+    results: tuple[ToolResult, ...] = ()
+
+
+@dataclass(frozen=True)
+class ToolRequest:
+    task: str
+    model: str
+    system: str
+    messages: tuple[AgentMessage, ...]
+    tools: tuple[ToolSpec, ...]
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ToolTurn:
+    """모델의 한 턴: 도구를 부르거나, 도구 없이 글로 답한다."""
+
+    text: str
+    tool_calls: tuple[ToolCall, ...]
+    usage: Usage
+    cost_usd: float = 0.0
+
+
 class LLMAdapter(Protocol):
     provider: str
+
+    def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        """도구 호출이 있는 한 턴. 다음 행동은 호출한 쪽(에이전트 루프)이 정한다."""
+        ...
 
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
         """JSON 문자열과 사용량을 돌려준다. 일시 오류는 TransientLLMError로 올린다."""

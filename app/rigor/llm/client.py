@@ -11,16 +11,21 @@ from __future__ import annotations
 import random
 import time
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 
 from pydantic import BaseModel, ValidationError
 
 from rigor.llm.budget import CostMeter
 from rigor.llm.routing import Routing
 from rigor.llm.types import (
+    AgentMessage,
     LLMAdapter,
     LLMRequest,
     LLMResult,
     StructuredOutputError,
+    ToolRequest,
+    ToolSpec,
+    ToolTurn,
     TransientLLMError,
     TruncatedOutputError,
     Usage,
@@ -104,14 +109,54 @@ class LLMClient:
             )
         raise AssertionError("unreachable")
 
+    def tool_turn(
+        self,
+        task: str,
+        *,
+        system: str,
+        messages: Sequence[AgentMessage],
+        tools: Sequence[ToolSpec],
+    ) -> ToolTurn:
+        """에이전트의 한 턴. 재시도·비용 계측·예산 차단은 structured와 같다."""
+        route = self.routing.resolve(task)
+        try:
+            adapter = self.adapters[route.provider]
+        except KeyError as exc:
+            raise KeyError(f"no adapter registered for provider {route.provider}") from exc
+        request = ToolRequest(
+            task=task,
+            model=route.model,
+            system=system,
+            messages=tuple(messages),
+            tools=tuple(tools),
+            params=dict(route.params),
+        )
+        try:
+            turn = self._retry(lambda: adapter.complete_tools(request))
+        except TruncatedOutputError as err:
+            self.meter.add(task, route.provider, route.model, err.usage)
+            raise
+        cost = self.meter.add(task, route.provider, route.model, turn.usage)
+        return replace(turn, cost_usd=cost)
+
     def _complete_with_retry(
         self, adapter: LLMAdapter, request: LLMRequest
     ) -> tuple[str, Usage, int]:
+        attempts = 0
+
+        def call() -> tuple[str, Usage]:
+            nonlocal attempts
+            attempts += 1
+            return adapter.complete(request)
+
+        raw, usage = self._retry(call)
+        return raw, usage, attempts
+
+    def _retry[R](self, call: Callable[[], R]) -> R:
         for attempt in range(self.max_transient_retries + 1):
             self.meter.check()
             try:
-                raw, usage = adapter.complete(request)
-                return raw, usage, attempt + 1
+                return call()
             except TransientLLMError:
                 if attempt == self.max_transient_retries:
                     raise

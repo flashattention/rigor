@@ -12,6 +12,9 @@ from typing import Any
 from rigor.llm.types import (
     LLMProviderError,
     LLMRequest,
+    ToolCall,
+    ToolRequest,
+    ToolTurn,
     TransientLLMError,
     TruncatedOutputError,
     Usage,
@@ -36,6 +39,55 @@ class AnthropicAdapter:
             client = Anthropic(timeout=timeout_s, max_retries=0)
         self.client = client
 
+    def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        params = dict(request.params)
+        max_tokens = params.pop("max_tokens", 4096)
+        messages: list[dict[str, Any]] = []
+        for m in request.messages:
+            if m.role == "tool":
+                content = [
+                    {"type": "tool_result", "tool_use_id": r.call_id, "content": r.content}
+                    for r in m.results
+                ]
+                messages.append({"role": "user", "content": content})
+            elif m.tool_calls:
+                blocks: list[dict[str, Any]] = [{"type": "text", "text": m.text}] if m.text else []
+                blocks += [
+                    {"type": "tool_use", "id": c.id, "name": c.name, "input": c.arguments}
+                    for c in m.tool_calls
+                ]
+                messages.append({"role": "assistant", "content": blocks})
+            else:
+                messages.append({"role": m.role, "content": m.text})
+        try:
+            resp = self.client.messages.create(
+                model=request.model,
+                max_tokens=max_tokens,
+                system=[
+                    {"type": "text", "text": request.system, "cache_control": {"type": "ephemeral"}}
+                ],
+                messages=messages,
+                tools=[
+                    {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+                    for t in request.tools
+                ],
+                **params,
+            )
+        except Exception as exc:
+            raise _classify(exc) from exc
+        usage = _usage(resp.usage)
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            raise TruncatedOutputError(
+                f"tool turn truncated at {usage.output_tokens} tokens", usage
+            )
+        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
+        calls = tuple(
+            ToolCall(b.id, b.name, dict(b.input))
+            for b in resp.content
+            if getattr(b, "type", None) == "tool_use"
+        )
+        return ToolTurn(text=text, tool_calls=calls, usage=usage)
+
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
         params = dict(request.params)
         max_tokens = params.pop("max_tokens", 4096)
@@ -59,13 +111,7 @@ class AnthropicAdapter:
             )
         except Exception as exc:
             raise _classify(exc) from exc
-        u = resp.usage
-        usage = Usage(
-            input_tokens=getattr(u, "input_tokens", 0) or 0,
-            output_tokens=getattr(u, "output_tokens", 0) or 0,
-            cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
-            cache_write_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
-        )
+        usage = _usage(resp.usage)
         if getattr(resp, "stop_reason", None) == "max_tokens":
             raise TruncatedOutputError(
                 f"output truncated at {usage.output_tokens} tokens; raise max_tokens", usage
@@ -74,6 +120,15 @@ class AnthropicAdapter:
         if block is None:
             raise LLMProviderError("response had no tool_use block")
         return json.dumps(block.input, ensure_ascii=False), usage
+
+
+def _usage(u: Any) -> Usage:
+    return Usage(
+        input_tokens=getattr(u, "input_tokens", 0) or 0,
+        output_tokens=getattr(u, "output_tokens", 0) or 0,
+        cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
+        cache_write_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
+    )
 
 
 def _classify(exc: Exception) -> Exception:

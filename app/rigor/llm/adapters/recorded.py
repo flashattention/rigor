@@ -9,10 +9,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
 
-from rigor.llm.types import LLMAdapter, LLMRequest, RecordingMissing, Usage
+from rigor.llm.types import (
+    LLMAdapter,
+    LLMRequest,
+    RecordingMissing,
+    ToolCall,
+    ToolRequest,
+    ToolTurn,
+    Usage,
+)
 
 DEFAULT_DIR = Path(__file__).resolve().parents[4] / "evals" / "recordings"
 
@@ -34,6 +43,11 @@ def recording_key(request: LLMRequest) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
+def tool_recording_key(request: ToolRequest) -> str:
+    blob = json.dumps(asdict(request), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode()).hexdigest()[:24]
+
+
 class RecordedAdapter:
     def __init__(
         self,
@@ -48,6 +62,35 @@ class RecordedAdapter:
         self.mode = mode
         self.inner = inner
         self.directory = directory
+
+    def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        path = self.directory / request.task / f"{tool_recording_key(request)}.json"
+        if self.mode == "replay":
+            if not path.exists():
+                raise RecordingMissing(
+                    f"no recording for tool turn task={request.task} key={path.stem}; "
+                    "re-record with a live adapter (inputs, prompt, or routing changed)"
+                )
+            data = json.loads(path.read_text(encoding="utf-8"))
+            calls = tuple(ToolCall(**c) for c in data["tool_calls"])
+            return ToolTurn(text=data["text"], tool_calls=calls, usage=Usage(**data["usage"]))
+        assert self.inner is not None
+        turn = self.inner.complete_tools(request)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "model": request.model,
+                    "text": turn.text,
+                    "tool_calls": [asdict(c) for c in turn.tool_calls],
+                    "usage": turn.usage.model_dump(),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return turn
 
     def _path(self, request: LLMRequest) -> Path:
         return self.directory / request.task / f"{recording_key(request)}.json"

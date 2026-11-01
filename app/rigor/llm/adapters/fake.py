@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from rigor.llm.types import LLMRequest, Usage
+from rigor.llm.types import LLMRequest, ToolRequest, ToolTurn, Usage
 
 Response = BaseModel | dict[str, Any] | str | Exception
 Handler = Callable[[LLMRequest], Response]
@@ -27,6 +27,8 @@ class FakeAdapter:
         self._handlers: dict[str, Handler] = {}
         self._queues: dict[str, deque[Response]] = {}
         self.requests: list[LLMRequest] = []
+        self._turns: dict[str, deque[ToolTurn | Exception]] = {}
+        self.tool_requests: list[ToolRequest] = []
 
     def on(self, task: str, handler: Handler) -> FakeAdapter:
         self._handlers[task] = handler
@@ -35,6 +37,21 @@ class FakeAdapter:
     def queue(self, task: str, responses: Iterable[Response]) -> FakeAdapter:
         self._queues.setdefault(task, deque()).extend(responses)
         return self
+
+    def queue_turns(self, task: str, turns: Iterable[ToolTurn | Exception]) -> FakeAdapter:
+        """에이전트 턴을 순서대로 돌려준다. 큐가 비면 테스트 실패 (예상보다 많이 부름)."""
+        self._turns.setdefault(task, deque()).extend(turns)
+        return self
+
+    def complete_tools(self, request: ToolRequest) -> ToolTurn:
+        self.tool_requests.append(request)
+        queue = self._turns.get(request.task)
+        if not queue:
+            raise AssertionError(f"FakeAdapter has no more tool turns for task {request.task}")
+        turn = queue.popleft()
+        if isinstance(turn, Exception):
+            raise turn
+        return turn
 
     def complete(self, request: LLMRequest) -> tuple[str, Usage]:
         self.requests.append(request)
