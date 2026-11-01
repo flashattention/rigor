@@ -29,6 +29,14 @@ SECTION_KEYWORDS = {
 _TEST_PATH = re.compile(
     r"(^|/)(tests?|__tests__|spec)/|(^|/)test_[^/]+\.py$|_test\.(py|go)$|\.(test|spec)\.[jt]sx?$"
 )
+# 단순 부분 문자열이면 GPL·BSD 본문의 "permitted"가 MIT로 잡힌다
+_LICENSES = (
+    ("Apache", re.compile(r"\bapache\b")),
+    ("GPL", re.compile(r"\b[al]?gpl\b|gnu (?:affero |lesser )?general public")),
+    ("BSD", re.compile(r"\bbsd\b|redistribution and use")),
+    ("MPL", re.compile(r"\bmpl\b|mozilla public")),
+    ("MIT", re.compile(r"\bmit\b|permission is hereby granted")),
+)
 _CI_PATH = re.compile(r"^\.github/workflows/[^/]+\.ya?ml$|^\.gitlab-ci\.yml$|^\.circleci/")
 _DEPLOY_FILES = re.compile(
     r"(^|/)(dockerfile|docker-compose[^/]*\.ya?ml|fly\.toml|vercel\.json|procfile|app\.ya?ml|"
@@ -117,9 +125,7 @@ def compute_signals(snap: RepoSnapshot, identity: CommitIdentity | None = None) 
     license_id = None
     if lic:
         head = snap.files.get(lic, "")[:200].lower()
-        license_id = next(
-            (k for k in ("MIT", "Apache", "GPL", "BSD", "MPL") if k.lower() in head), "other"
-        )
+        license_id = next((k for k, p in _LICENSES if p.search(head)), "other")
     langs: Counter[str] = Counter()
     for p in snap.paths:
         ext = PurePosixPath(p).suffix.lower()
