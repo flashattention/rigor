@@ -1,0 +1,22 @@
+# ADR-0009 결정 2. 노드는 task만 요청하고, 어떤 제공자·모델을 쓸지는 여기서 정한다.
+# 제공자를 바꾸면 라우팅 해시가 바뀌어 녹화 재생이 실패한다 → 다시 녹화하고 기준선을 재측정한다.
+# RIGOR_ROUTING_PROFILE 환경 변수로 active를 덮어쓸 수 있다.
+active: fake
+
+profiles:
+  # 테스트·개발 기본값. 네트워크 없음, 비용 0.
+  fake:
+    default: {provider: fake, model: fake-1, params: {}}
+
+  # 단계 1: 남은 OpenAI 크레딧으로 파이프라인 확인만 (공식 기준선 아님).
+  # 모델 이름·가격은 사용자 계정에서 확인 후 pricing.yaml의 verified를 true로 바꾼다.
+  openai_phase1:
+    default: {provider: openai, model: gpt-5-nano, params: {max_completion_tokens: 8000}}
+
+  # 단계 2: Max 포함 API 크레딧. 공식 기준선은 이 프로필로 측정한다.
+  anthropic_haiku:
+    default: {provider: anthropic, model: claude-haiku-5-5, params: {max_tokens: 8000, temperature: 0}}
+    tasks: {}
+    # 단계 3 (평가로 필요가 입증될 때만): requirement_verdict만 Sonnet 5.5로
+    # tasks:
+    #   requirement_verdict: {model: claude-sonnet-5-5}
