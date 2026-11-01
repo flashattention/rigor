@@ -92,12 +92,51 @@ def test_stops_when_the_token_budget_is_used_up():
     assert out.verdict.result is ClaimResult.UNVERIFIABLE
 
 
-def test_answering_without_a_tool_ends_as_unverifiable():
-    out, _ = run([ToolTurn("확인됐습니다. 믿어 주세요.", (), USE)])
+TEXT_ONLY = ToolTurn("확인됐습니다. 믿어 주세요.", (), USE)
+
+
+def test_answering_without_a_tool_twice_ends_as_unverifiable():
+    out, fake = run([TEXT_ONLY, TEXT_ONLY])
     assert out.stop_reason == "no_tool_call"
     assert out.verdict.result is ClaimResult.UNVERIFIABLE
+    assert len(fake.tool_requests) == 2
     # 모델을 부른 순간 비용이 발생한다. 글로만 답한 마지막 턴도 집계되어야 한다
-    assert out.steps == 1 and out.prompt_tokens == 100
+    assert out.steps == 2 and out.prompt_tokens == 200
+
+
+def test_a_text_only_answer_gets_one_reminder_to_submit():
+    out, fake = run([TEXT_ONLY, READ, GOOD])
+    assert out.verdict.result is ClaimResult.SUPPORTED and out.steps == 3
+    reminder = fake.tool_requests[1].messages[-1]
+    assert reminder.role == "user" and "submit_verdict" in reminder.text
+    # 안내 뒤에도 근거가 더 필요하면 계속 조사할 수 있어야 한다
+    assert "read_file" in {t.name for t in fake.tool_requests[1].tools}
+
+
+def test_text_answer_stays_in_the_history_before_the_reminder():
+    _, fake = run([TEXT_ONLY, READ, GOOD])
+    assert [m.role for m in fake.tool_requests[1].messages] == ["user", "assistant", "user"]
+    assert fake.tool_requests[1].messages[1].text == TEXT_ONLY.text
+
+
+def test_empty_text_answer_is_not_added_to_the_history():
+    # 빈 assistant 메시지는 Anthropic API가 거부할 수 있다
+    empty = ToolTurn("", (), USE)
+    _, fake = run([empty, READ, GOOD])
+    assert [m.role for m in fake.tool_requests[1].messages] == ["user", "user"]
+
+
+def test_reminder_is_used_once_even_after_more_tool_calls():
+    out, _ = run([TEXT_ONLY, READ, TEXT_ONLY])
+    assert out.stop_reason == "no_tool_call" and out.steps == 3
+
+
+def test_last_step_offers_only_the_submit_tool():
+    out, fake = run([READ, READ, GOOD], budget=AgentBudget(max_steps=3))
+    names = [{t.name for t in r.tools} for r in fake.tool_requests]
+    assert "read_file" in names[0] and "read_file" in names[1]
+    assert names[2] == {"submit_verdict"}
+    assert out.verdict.result is ClaimResult.SUPPORTED and out.stop_reason == "submitted"
 
 
 def test_a_bad_tool_call_becomes_an_observation_and_the_loop_continues():

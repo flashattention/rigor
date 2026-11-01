@@ -17,6 +17,7 @@ from rigor.schemas.profile import Claim
 from rigor.schemas.repo import ClaimResult
 
 TASK = "claim_verify"
+SUBMIT_VERDICT = next(t for t in TOOLS if t.name == SUBMIT)
 
 
 @dataclass(frozen=True)
@@ -42,12 +43,14 @@ def verify_claim(
 ) -> AgentOutcome:
     """모델이 도구를 고르고, 코드가 실행해 결과를 돌려주는 루프.
 
-    예산을 넘기거나 모델이 도구를 부르지 않으면 unverifiable로 끝난다. LLM 오류는 잡지 않는다.
+    도구 없는 답에는 한 번 안내하고, 마지막 스텝에는 제출 도구만 준다. 예산을 넘기거나
+    안내 뒤에도 도구를 부르지 않으면 unverifiable로 끝난다. LLM 오류는 잡지 않는다.
     """
 
     system = load_prompt(TASK).text
     messages = [AgentMessage("user", text=data_block("claim", claim.text))]
     steps, prompt_tokens, cost_usd = 0, 0, 0.0
+    no_tool_call_redirected = False
 
     def finish(verdict, reason):
         return AgentOutcome(
@@ -70,13 +73,26 @@ def verify_claim(
                 CheckedVerdict(ClaimResult.UNVERIFIABLE, "프롬프트 토큰 예산 소모"), "token_budget"
             )
 
-        turn = client.tool_turn(TASK, system=system, messages=messages, tools=TOOLS)
+        current_tools = [SUBMIT_VERDICT] if steps == budget.max_steps - 1 else TOOLS
+        turn = client.tool_turn(TASK, system=system, messages=messages, tools=current_tools)
 
         steps += 1
         prompt_tokens += turn.usage.prompt_tokens
         cost_usd += turn.cost_usd
 
         if turn.tool_calls == ():
+            if turn.text.strip():
+                messages.append(AgentMessage("assistant", text=turn.text))
+            if not no_tool_call_redirected:
+                no_tool_call_redirected = True
+                messages.append(
+                    AgentMessage(
+                        "user",
+                        text="판단이 섰으면 submit_verdict로 제출하라. 근거가 더 필요하면 도구로 계속 조사하라.",
+                    )
+                )
+                continue
+
             return finish(
                 CheckedVerdict(ClaimResult.UNVERIFIABLE, "도구 호출 없음"), "no_tool_call"
             )
