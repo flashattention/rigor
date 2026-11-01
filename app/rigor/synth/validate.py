@@ -29,6 +29,15 @@ def validate_case(case: Case) -> list[str]:
     if set(t.verdicts) != req_ids:
         problems.append(f"verdict keys {sorted(t.verdicts)} != requirements {sorted(req_ids)}")
 
+    # met/partial 요건은 정답 근거가 있어야 하고, 근거는 존재하는 fact여야 한다
+    fact_ids = {f.id for f in case.profile.facts}
+    for rid, status in t.verdicts.items():
+        support = t.verdict_support.get(rid, [])
+        if status in (VerdictStatus.MET, VerdictStatus.PARTIAL) and not support:
+            problems.append(f"{rid} is {status} without verdict_support")
+        if set(support) - fact_ids:
+            problems.append(f"{rid} support refers to missing facts {set(support) - fact_ids}")
+
     # 결격 미충족이면 비추천, 비추천이면 대안 필요
     knockouts = [r.id for r in case.job.requirements if r.kind is RequirementKind.KNOCKOUT]
     if (

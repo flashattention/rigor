@@ -115,6 +115,7 @@ class RepoTruth(BaseModel):
 
 class GroundTruth(BaseModel):
     verdicts: dict[str, VerdictStatus]
+    verdict_support: dict[str, list[str]] = Field(default_factory=dict)  # 요건 → 정답 근거 fact
     critical_gap_requirements: list[str] = Field(default_factory=list)
     grade: Grade
     redirect_role: str | None = None

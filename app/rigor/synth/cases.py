@@ -322,6 +322,12 @@ def case_agent_strong() -> Case:
     )
     truth = GroundTruth(
         verdicts={"r_1": S, "r_2": S, "r_3": S, "r_4": S, "r_5": U},
+        verdict_support={
+            "r_1": ["f_a1", "f_a2"],
+            "r_2": ["f_a1"],
+            "r_3": ["f_a1"],
+            "r_4": ["f_a2"],
+        },
         grade=Grade.STRONG,
         claims=[
             ClaimTruth(claim_id="c_a1_lg", result=ClaimResult.SUPPORTED, keyword="langgraph"),
@@ -459,6 +465,7 @@ def case_data_redirect() -> Case:
     job = case_agent_strong().job.model_copy(update={"id": "j_b"})
     truth = GroundTruth(
         verdicts={"r_1": S, "r_2": P, "r_3": U, "r_4": U, "r_5": U},
+        verdict_support={"r_1": ["f_b1"], "r_2": ["f_b2"]},
         critical_gap_requirements=["r_4"],
         grade=Grade.NOT_RECOMMENDED,
         redirect_role="data_engineer",
@@ -564,6 +571,7 @@ def case_knockout_degree() -> Case:
     )
     truth = GroundTruth(
         verdicts={"r_1": U, "r_2": S, "r_3": S},
+        verdict_support={"r_2": ["f_c1"], "r_3": ["f_c1"]},
         grade=Grade.NOT_RECOMMENDED,
         alternative_expected=True,
         claims=[
@@ -734,6 +742,7 @@ def case_contribution_overstated() -> Case:
     )
     truth = GroundTruth(
         verdicts={"r_1": S, "r_2": S, "r_3": U},
+        verdict_support={"r_1": ["f_d2"], "r_2": ["f_d2"]},
         grade=Grade.APPLY,
         claims=[
             ClaimTruth(
@@ -854,6 +863,7 @@ def case_ai_and_exposure() -> Case:
     )
     truth = GroundTruth(
         verdicts={"r_1": S, "r_2": S, "r_3": S, "r_4": U},
+        verdict_support={"r_1": ["f_e1"], "r_2": ["f_e1"], "r_3": ["f_e1"]},
         grade=Grade.APPLY,
         claims=[
             ClaimTruth(claim_id="c_e1_fastapi", result=ClaimResult.SUPPORTED, keyword="fastapi"),
