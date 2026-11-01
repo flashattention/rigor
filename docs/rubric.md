@@ -20,7 +20,7 @@
 - 팀 성과(`attribution=team`)는 본인 역할이 명시된 경우에만 근거로 인정.
 - `legal_check=flag` 요건(보호 속성 기반)은 판정하지 않는다.
 
-## 2. 등급 규칙 (결정론)
+## 2. 등급 규칙 (결정론, ADR-0008)
 
 정의: `R` = required 요건 수, `met=1, partial=0.5, unmet/unknown=0` 가중 충족률 `cov_req`, preferred 요건의 같은 값 `cov_pref`. `critical_gaps` = 핵심(●●) 역량에 연결된 required 요건 중 `unmet` 수.
 
