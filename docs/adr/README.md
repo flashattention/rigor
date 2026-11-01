@@ -14,7 +14,7 @@
 | [0006](0006-github-analysis.md) | GitHub 분석 방식 (API vs clone, 격리, 캐시) | 채택됨 |
 | [0007](0007-north-star-metric.md) | North Star Metric | 제안됨 |
 | [0008](0008-grading-rules.md) | 등급 산출 규칙 (결정론 + 근거 있는 기준값) | 채택됨 |
-| [0009](0009-llm-provider-routing.md) | LLM 제공자·모델 라우팅 (Jev 검토 포함) | 제안됨 (일부 결정) |
-| [0010](0010-vector-db-rag-scope.md) | 벡터 DB·RAG 도입 범위 | 제안됨 |
+| [0009](0009-llm-provider-routing.md) | LLM 제공자·모델 라우팅 (Jev 검토 포함) | 채택됨 |
+| [0010](0010-vector-db-rag-scope.md) | 벡터 DB·RAG 도입 범위 | 채택됨 |
 
 후보(아직 작성 안 함): 확률 대신 등급 · 보호 속성 제외 · B2B 확장 금지 · 매칭 기능 이연 · 프론트엔드.
