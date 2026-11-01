@@ -251,3 +251,4 @@ README 구성: `RIGOR — Resume Inspection with GitHub for Offer Readiness` 제
   - 이력서 HWP/HWPX·스캔 PDF 지원 (ADR-0011, Q11), 진단 어조 직설 고정 (ADR-0012, Q16), 서비스 대상 한국 거주자 (Q13)
   - Fact Verifier 출처 표기: 링크 없이 서술 (Q21)
   - 핵심 흐름 그래프 재구성: 이력서–저장소 정합 우선, AI 사용은 명시적 메타데이터로만 (ADR-0017)
+  - 두 진입 경로(매칭 / 공고 지정 진단). 아래 §1.2의 "매칭은 확장 기능"을 대체한다 (ADR-0019)
