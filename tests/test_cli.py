@@ -28,3 +28,13 @@ def test_cost_estimate_batch_halves_cost():
 def test_unverified_price_is_flagged():
     result = runner.invoke(app, ["cost", "estimate", "--runs", "1", "--profile", "openai_phase1"])
     assert "미검증" in result.output
+
+
+def test_synth_list_and_build(tmp_path):
+    listed = runner.invoke(app, ["synth", "list"])
+    assert listed.exit_code == 0 and "A_agent_strong" in listed.output
+    out = tmp_path / "case"
+    built = runner.invoke(app, ["synth", "build", "E_ai_and_exposure", "--out", str(out)])
+    assert built.exit_code == 0, built.output
+    assert (out / "resume.txt").exists() and (out / "truth.json").exists()
+    assert (out / "repos" / "synth-user-e" / "todo-api" / ".git").is_dir()
