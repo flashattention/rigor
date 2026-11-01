@@ -17,7 +17,7 @@ from rigor.ingest.privacy import MaskResult
 from rigor.llm.client import LLMClient
 from rigor.prompts import data_block, load_prompt
 from rigor.safety.injection import is_injection
-from rigor.schemas.common import StrictModel
+from rigor.schemas.common import DraftModel
 from rigor.schemas.profile import (
     Attribution,
     Claim,
@@ -36,12 +36,12 @@ from rigor.taxonomy import load_taxonomy
 TASK = "fact_extract"
 
 
-class ClaimDraft(StrictModel):
+class ClaimDraft(DraftModel):
     type: ClaimType
     text: str = Field(min_length=1)
 
 
-class FactDraft(StrictModel):
+class FactDraft(DraftModel):
     category: FactCategory
     content: str = Field(min_length=1)
     start: str | None = None
@@ -58,7 +58,7 @@ class FactDraft(StrictModel):
     uncertain: list[str] = Field(default_factory=list)
 
 
-class ProfileDraft(StrictModel):
+class ProfileDraft(DraftModel):
     facts: list[FactDraft]
 
 

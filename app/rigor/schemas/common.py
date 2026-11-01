@@ -17,6 +17,16 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DraftModel(BaseModel):
+    """LLM 출력용 초안. 스키마에 없는 필드는 **버린다** (거부하지 않는다).
+
+    모델이 필드를 덧붙여도(실제 gpt-5-nano 실행에서 관찰) 그 값은 어디에도 쓰이지 않으므로
+    "스키마 밖 값이 들어오는 것"은 막으면서 불필요한 실패를 줄인다. 도메인 스키마는 StrictModel.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class Citation(StrictModel):
     kind: Literal["requirement", "fact", "repo_evidence"]
     ref_id: str = Field(min_length=1)

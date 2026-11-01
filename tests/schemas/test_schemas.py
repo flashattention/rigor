@@ -155,3 +155,19 @@ def test_roadmap_item_requires_requirements_and_done_criteria():
 def test_unknown_fields_are_rejected():
     with pytest.raises(ValidationError):
         Citation(kind="fact", ref_id="f_1", confidence=0.9)
+
+
+def test_llm_drafts_ignore_extra_fields_but_domain_models_reject_them():
+    from rigor.nodes.jd_parser import JobDraft
+
+    draft = JobDraft.model_validate(
+        {
+            "company": "c",
+            "title": "t",
+            "requirements": [{"text": "x", "kind": "required"}],
+            "categories": {},
+        }
+    )
+    assert not hasattr(draft, "categories")
+    with pytest.raises(ValidationError):
+        Citation(kind="fact", ref_id="f_1", extra_field=1)

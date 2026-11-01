@@ -19,7 +19,7 @@ from pydantic import Field
 from rigor.llm.client import LLMClient
 from rigor.prompts import data_block, load_prompt
 from rigor.safety.injection import find_injection_lines, is_injection
-from rigor.schemas.common import StrictModel
+from rigor.schemas.common import DraftModel
 from rigor.schemas.job import (
     ExperienceYears,
     JobPosting,
@@ -47,7 +47,7 @@ _PROTECTED = re.compile(
 )
 
 
-class RequirementDraft(StrictModel):
+class RequirementDraft(DraftModel):
     text: str = Field(min_length=1)
     kind: RequirementKind
     knockout_type: KnockoutType | None = None
@@ -56,7 +56,7 @@ class RequirementDraft(StrictModel):
     min_depth: int | None = Field(default=None, ge=0, le=3)
 
 
-class JobDraft(StrictModel):
+class JobDraft(DraftModel):
     company: str
     title: str
     role_ids: list[str] = Field(default_factory=list)
