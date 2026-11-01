@@ -10,12 +10,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from rigor.github_audit.markers import AI_COAUTHOR_MARKERS
 from rigor.schemas.diagnosis import Grade, VerdictStatus
 from rigor.schemas.job import JobPosting
 from rigor.schemas.profile import Profile, UnlinkedReason
 from rigor.schemas.repo import ClaimResult, ExposureKind, Mismatch, RepoVerdict
-
-AI_COAUTHOR_MARKERS = ("noreply@anthropic.com", "copilot", "cursor", "codex", "openai")
 
 
 class AuthorSpec(BaseModel):
