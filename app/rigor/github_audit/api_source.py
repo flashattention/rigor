@@ -97,6 +97,15 @@ class GitHubSource:
             for d in data
         ]
 
+    def is_contributor(self, full_name: str, login: str) -> bool:
+        """본인 소유가 아닌 저장소(팀 조직, 다른 사용자)에 본인 계정의 커밋이 있는가 (ADR-0006)."""
+        try:
+            return bool(
+                self._json(f"{API}/repos/{full_name}/commits?author={quote(login)}&per_page=1")
+            )
+        except GitHubError:
+            return False
+
     def snapshot(self, full_name: str) -> RepoSnapshot:
         meta, raw = self.meta(full_name)
         branch = raw.get("default_branch") or "main"
@@ -140,6 +149,7 @@ class GitHubSource:
                 break
             for c in batch:
                 author = c["commit"]["author"]
+                account = c.get("author") or {}
                 commits.append(
                     CommitInfo(
                         sha=c["sha"],
@@ -147,6 +157,7 @@ class GitHubSource:
                         author_email=(author.get("email") or "").lower(),
                         when=datetime.fromisoformat(author["date"].replace("Z", "+00:00")),
                         message=c["commit"].get("message") or "",
+                        author_login=account.get("login"),
                     )
                 )
             if len(batch) < 100:

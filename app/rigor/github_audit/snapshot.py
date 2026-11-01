@@ -45,6 +45,7 @@ class CommitInfo:
     when: datetime
     message: str
     changes: tuple[FileChange, ...] = ()  # API 스냅샷에서는 비어 있을 수 있다
+    author_login: str | None = None  # GitHub 계정에 연결된 커밋이면 그 로그인 (API 스냅샷)
 
 
 @dataclass

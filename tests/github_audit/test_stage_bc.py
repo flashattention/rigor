@@ -266,3 +266,39 @@ def test_api_source_builds_snapshot_without_network():
     from rigor.github_audit.signals import compute_signals
 
     assert {"langgraph", "faiss"} <= set(compute_signals(snap).dependencies)
+
+
+def test_selection_includes_contributed_team_repo_and_skips_others():
+    from datetime import UTC, datetime
+
+    from rigor.github_audit.selection import identity_from_account, select_repos
+    from rigor.github_audit.snapshot import CommitInfo, RepoSnapshot
+
+    owned = [RepoMeta(1, "me/blog", "개인 기술 블로그"), RepoMeta(2, "me/dotfiles", "설정")]
+    base = CASES[0].profile
+    facts = [
+        base.facts[0].model_copy(
+            update={"repo_link": RepoLink(url="https://github.com/team/project")}
+        ),
+        base.facts[1].model_copy(
+            update={"repo_link": RepoLink(url="https://github.com/stranger/repo")}
+        ),
+        base.facts[2],  # 개인 기술 블로그 (링크 없음)
+    ]
+    profile = base.model_copy(update={"facts": facts})
+    sel = select_repos(profile, owned, "me", lambda name, login: name == "team/project")
+    assert sel.full_names[0] == "team/project"
+    assert "me/blog" in sel.full_names and "stranger/repo" in sel.skipped_not_mine
+
+    when = datetime(2025, 1, 1, tzinfo=UTC)
+    snap = RepoSnapshot(
+        RepoMeta(3, "team/project"),
+        "sha",
+        [],
+        {},
+        [
+            CommitInfo("a", "Me", "me@work.com", when, "x", author_login="me"),
+            CommitInfo("b", "Other", "o@x.com", when, "y", author_login="other"),
+        ],
+    )
+    assert identity_from_account("me", {3: snap}).emails == ["me@work.com"]

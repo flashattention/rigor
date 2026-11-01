@@ -223,6 +223,12 @@ def diagnose(
     jd: Path | None = typer.Option(None, exists=True, help="공고 텍스트 파일"),
     repo: list[Path] = typer.Option([], help="로컬 git 저장소 경로 (여러 번 지정 가능)"),
     github_repo: list[str] = typer.Option([], help="공개 GitHub 저장소 owner/name (여러 번)"),
+    github_login: str | None = typer.Option(
+        None, help="GitHub 계정: 본인 소유 + 이력서에 링크된 기여 저장소를 자동 수집"
+    ),
+    use_gh_token: bool = typer.Option(
+        False, help="gh CLI 토큰을 GitHub API 요청 한도 용도로만 사용 (읽기 요청만 보냄)"
+    ),
     login: str = typer.Option("", help="GitHub 로그인 (커밋 신원 기준)"),
     email: list[str] = typer.Option([], help="본인 커밋 이메일 (여러 번)"),
     profile: str | None = typer.Option(None, help="라우팅 프로필"),
@@ -272,9 +278,21 @@ def diagnose(
         resume_text, jd_text = render_resume(case), render_jd(case)
         truth_profile = profile_after_stage_a(case) if use_truth_profile else None
     else:
-        if not (resume and jd and (repo or github_repo)):
-            typer.echo("--resume, --jd, 그리고 --repo 또는 --github-repo가 필요합니다.")
+        if not (resume and jd and (repo or github_repo or github_login)):
+            typer.echo(
+                "--resume, --jd, 그리고 --repo / --github-repo / --github-login 중 하나가 필요합니다."
+            )
             raise typer.Exit(code=1)
+        if use_gh_token:
+            import os
+            import subprocess
+
+            os.environ.setdefault(
+                "GITHUB_TOKEN",
+                subprocess.run(
+                    ["gh", "auth", "token"], capture_output=True, text=True, check=True
+                ).stdout.strip(),
+            )
         resume_text = extract_text(resume.read_bytes()).text
         jd_text = jd.read_text(encoding="utf-8")
         snaps = {}
@@ -314,6 +332,24 @@ def diagnose(
             ),
         )
         prof = prof.model_copy(update={"identity": identity})
+    if github_login and not synth_case:
+        from rigor.github_audit.api_source import GitHubSource
+        from rigor.github_audit.selection import identity_from_account, select_repos
+
+        source = GitHubSource()
+        owned = source.list_user_repos(github_login)
+        sel = select_repos(prof, owned, github_login, source.is_contributor)
+        for note in sel.notes:
+            typer.echo(f"  {note}")
+        for name in sel.skipped_not_mine:
+            typer.echo(f"  본인 계정 커밋이 없는 저장소라 분석하지 않음: {name}")
+        typer.echo(f"  수집할 저장소 {len(sel.full_names)}개: {', '.join(sel.full_names)}")
+        for full in sel.full_names:
+            snap = source.snapshot(full)
+            snaps[snap.meta.repo_id] = snap
+        prof = prof.model_copy(
+            update={"identity": identity_from_account(github_login, snaps, email)}
+        )
     job = parse_jd(client, jd_text, "j_cli").job
 
     def choose_unlinked(fact, item):
