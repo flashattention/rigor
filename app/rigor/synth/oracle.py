@@ -6,11 +6,17 @@ FakeAdapter에 등록하면 실제 LLM 없이 노드의 후처리·배선을 끝
 
 from __future__ import annotations
 
+import re
+
 from rigor.ingest.privacy import MaskResult
 from rigor.llm.adapters.fake import FakeAdapter
 from rigor.nodes.jd_parser import JobDraft, RequirementDraft
 from rigor.nodes.profile_builder import ClaimDraft, FactDraft, ProfileDraft
+from rigor.nodes.project_planner import ProjectDraft, ProjectsDraft
+from rigor.nodes.reconcile import CardDraft, CardsDraft
+from rigor.nodes.requirement_matcher import CitationDraft, VerdictDraft, VerdictsDraft
 from rigor.schemas.profile import FactCategory
+from rigor.schemas.repo import DoneCriterion
 from rigor.synth.spec import Case
 
 
@@ -69,9 +75,67 @@ def job_draft(case: Case) -> JobDraft:
     )
 
 
-def oracle_adapter(case: Case, mask: MaskResult) -> FakeAdapter:
-    return (
-        FakeAdapter()
-        .on("fact_extract", lambda _req: profile_draft(case, mask))
-        .on("jd_parse", lambda _req: job_draft(case))
+def verdicts_draft(case: Case) -> VerdictsDraft:
+    return VerdictsDraft(
+        verdicts=[
+            VerdictDraft(
+                requirement_id=rid,
+                status=status,
+                citations=[
+                    CitationDraft(ref_id=f) for f in case.truth.verdict_support.get(rid, [])
+                ],
+                rationale="합성 정답에 따른 판정",
+            )
+            for rid, status in case.truth.verdicts.items()
+        ]
     )
+
+
+def cards_draft(request_text: str) -> CardsDraft:
+    ids = dict.fromkeys(re.findall(r"\[(c_[A-Za-z0-9_]+)\]", request_text))
+    return CardsDraft(
+        cards=[
+            CardDraft(
+                claim_id=cid,
+                likely_questions=["이 부분에서 본인이 내린 설계 결정은 무엇인가요?"],
+                talking_points=["저장소에서 확인된 근거를 짚는다"],
+            )
+            for cid in ids
+        ]
+    )
+
+
+def projects_draft(request_text: str) -> ProjectsDraft:
+    ids = dict.fromkeys(re.findall(r"\[(r_[0-9]+)\]", request_text))
+    return ProjectsDraft(
+        items=[
+            ProjectDraft(
+                title=f"{rid} 근거를 만드는 소규모 프로젝트",
+                problem="부족한 요건을 직접 구현해 근거를 만든다",
+                done_criteria=[
+                    DoneCriterion(signal_path="tests.file_count", op=">=", value=3),
+                    DoneCriterion(signal_path="readme.sections", op="contains", value="results"),
+                ],
+                resume_line_example="(완료 후) 요건과 관련된 기능을 구현하고 평가 결과를 README에 게시",
+                effort_days=5,
+                addresses_requirements=[rid],
+            )
+            for rid in ids
+        ]
+    )
+
+
+def oracle_adapter(case: Case, mask: MaskResult | None = None) -> FakeAdapter:
+    def text(req) -> str:
+        return "".join(m["content"] for m in req.messages)
+
+    adapter = (
+        FakeAdapter()
+        .on("jd_parse", lambda _req: job_draft(case))
+        .on("requirement_verdict", lambda _req: verdicts_draft(case))
+        .on("interview_card", lambda req: cards_draft(text(req)))
+        .on("roadmap_write", lambda req: projects_draft(text(req)))
+    )
+    if mask is not None:
+        adapter.on("fact_extract", lambda _req: profile_draft(case, mask))
+    return adapter
