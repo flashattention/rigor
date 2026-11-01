@@ -6,12 +6,12 @@
 
 | # | 제목 | 상태 |
 |---|---|---|
-| [0001](0001-backend-framework.md) | 백엔드 프레임워크 | 제안됨 |
-| [0002](0002-agent-framework.md) | 에이전트 프레임워크와 그래프 구조 | 제안됨 |
-| [0003](0003-tracing.md) | LLM 트레이싱 도구 | 제안됨 |
-| [0004](0004-deployment-infra.md) | 배포처·인프라 | 제안됨 |
-| [0005](0005-job-posting-collection.md) | 공고 수집 방식 | 제안됨 |
-| [0006](0006-github-analysis.md) | GitHub 분석 방식 (API vs clone, 격리, 캐시) | 제안됨 |
+| [0001](0001-backend-framework.md) | 백엔드 프레임워크 | 채택됨 |
+| [0002](0002-agent-framework.md) | 에이전트 프레임워크와 그래프 구조 | 채택됨 |
+| [0003](0003-tracing.md) | LLM 트레이싱 도구 | 채택됨 |
+| [0004](0004-deployment-infra.md) | 배포처·인프라 | 채택됨 |
+| [0005](0005-job-posting-collection.md) | 공고 수집 방식 | 채택됨 |
+| [0006](0006-github-analysis.md) | GitHub 분석 방식 (API vs clone, 격리, 캐시) | 채택됨 |
 | [0007](0007-north-star-metric.md) | North Star Metric | 제안됨 |
 
 후보(아직 작성 안 함): 확률 대신 등급 · 등급 산출의 결정론화 · 보호 속성 제외 · B2B 확장 금지 · 매칭 기능 이연 · LLM 제공자·모델 선택 · 프론트엔드.
