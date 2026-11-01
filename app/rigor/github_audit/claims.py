@@ -121,6 +121,28 @@ def _overlaps(fact: Fact, period: tuple[str, str] | None) -> bool | None:
     return not (last < start or first > end)
 
 
+_READABLE = (
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".go",
+    ".java",
+    ".kt",
+    ".rs",
+    ".ipynb",
+    ".md",
+    ".csv",
+    ".json",
+    ".txt",
+)
+
+
+def _read_everything(snap: RepoSnapshot) -> bool:
+    """파일을 다 읽지 않았으면 "저장소에 없다"고 단정할 수 없다 (오탐 방지, 위험 R24)."""
+    return all(p in snap.files for p in snap.paths if p.lower().endswith(_READABLE))
+
+
 def check_claims_by_rules(
     fact: Fact,
     snap: RepoSnapshot | None,
@@ -168,11 +190,13 @@ def check_claims_by_rules(
                 pending.append(c)
                 continue
             hit = sorted(skills & deps)
-            if hit:
+            if (
+                hit and skills <= deps
+            ):  # 나열된 기술이 모두 있어야 확인됨. 일부만 있으면 아래에서 보류
                 where = _find(snap, hit[0]) or _find(snap, hit[0].replace("_", "-"))
                 cite = ev.add(*(where or (None, None, f"의존성: {hit[0]}")))
                 done(c, ClaimResult.SUPPORTED, [cite])
-            elif not any(_find(snap, s) for s in skills):
+            elif _read_everything(snap) and not any(_find(snap, s) for s in skills):
                 done(
                     c,
                     ClaimResult.NOT_FOUND,
@@ -191,7 +215,7 @@ def check_claims_by_rules(
             where = next((w for n in nums if (w := _find(snap, n, docs))), None)
             if where:
                 done(c, ClaimResult.SUPPORTED, [ev.add(*where)])
-            elif nums:
+            elif nums and _read_everything(snap):
                 done(
                     c,
                     ClaimResult.NOT_FOUND,

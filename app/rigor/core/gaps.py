@@ -129,7 +129,9 @@ def weaknesses(
     vague = [
         f
         for f in projects
-        if f.attribution is Attribution.TEAM and not (f.role or f.contribution_note)
+        if f.attribution is Attribution.TEAM
+        and not (f.role or f.contribution_note)
+        and not any(c.type in (ClaimType.ROLE, ClaimType.FEATURE) for c in f.claims)
     ]
     if vague:
         out.append(
@@ -162,7 +164,7 @@ def weaknesses(
                 text="이 공고의 대표 프로젝트로 내세울 저장소가 아직 없다",
                 citations=[
                     Citation(kind="repo_evidence", ref_id=f"e_{j.repo_id}_summary")
-                    for j in judgements
+                    for j in judgements[:3]
                 ],
             )
         )

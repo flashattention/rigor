@@ -99,14 +99,14 @@ def judge_repo(
         blockers.append("X2 블라인드 공고인데 실명·연락처·학교 노출")
     readme = next((t for p, t in snap.files.items() if p.lower().startswith("readme")), "")
     contribution = audit.contribution
-    if audit.is_fork and contribution and contribution.user_commits == 0:
+    if contribution and contribution.total_commits and contribution.user_commits == 0:
         return RepoJudgement(
             audit.repo_id,
             scores,
             quality,
             relevant,
             RepoVerdict.DROP,
-            notes=["X3 포크 후 본인 변경 없음"],
+            notes=["X3 본인 커밋 없음 (포크 또는 복사본)"],
         )
     if _TUTORIAL.search(readme) and audit.signals.commits.total <= 5:
         blockers.append("X4 튜토리얼을 따라 한 저장소로 보임 (휴리스틱)")

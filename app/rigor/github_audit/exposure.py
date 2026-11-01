@@ -28,6 +28,10 @@ _SECRETS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
 ]
+_PLACEHOLDER = re.compile(
+    r"""^\s*['"]?\s*(your|xxx|<|\$\{|\{\{|changeme|change_me|example|placeholder|sample|dummy)""",
+    re.I,
+)
 _SKIP_EXT = (".lock", ".min.js", ".svg", ".png", ".jpg")
 
 
@@ -41,6 +45,14 @@ class ExposureContext:
     schools: list[str] = field(default_factory=list)
 
 
+def _benign(match: str, path: str, text: str) -> bool:
+    """문서의 자리표시자와, 원래 클라이언트에 공개되는 Firebase 웹 설정 키는 비밀값이 아니다."""
+    value = re.split(r"[=:]", match, maxsplit=1)[-1]
+    if _PLACEHOLDER.search(value):
+        return True
+    return "AIza" in value and ("firebase" in path.lower() or "firebaseconfig" in text.lower())
+
+
 def scan_exposure(snap: RepoSnapshot, ctx: ExposureContext) -> list[ExposureFinding]:
     findings: list[ExposureFinding] = []
     pii = [
@@ -52,7 +64,9 @@ def scan_exposure(snap: RepoSnapshot, ctx: ExposureContext) -> list[ExposureFind
         if path.endswith(_SKIP_EXT):
             continue
         for label, pattern in _SECRETS:
-            m = pattern.search(text)
+            m = next(
+                (x for x in pattern.finditer(text) if not _benign(x.group(0), path, text)), None
+            )
             if m:
                 line = text.count("\n", 0, m.start()) + 1
                 findings.append(

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 from pydantic import Field
 
+from rigor.github_audit.claims import skills_in_text
 from rigor.llm.client import LLMClient
 from rigor.prompts import data_block, load_prompt
 from rigor.schemas.common import Citation, DraftModel
@@ -23,6 +24,7 @@ from rigor.schemas.profile import (
     Claim,
     ClaimType,
     Fact,
+    FactCategory,
     FactStatus,
     Implementation,
     Profile,
@@ -37,6 +39,7 @@ from rigor.schemas.repo import (
     ReconciliationDecision,
     RepoAudit,
 )
+from rigor.taxonomy import load_taxonomy
 
 DELETE = "[삭제]"
 MAX_CARDS = 8
@@ -118,7 +121,19 @@ def suggest_revision(
         return f"{team}{_areas_text(contribution)} 작업 담당"
     if mismatch is Mismatch.AI_ASSISTED_UNEXPLAINED:
         return f"{claim.text} (AI 코딩 도구를 활용해 구현)"
-    return DELETE  # 코드에 없는 기술·기능: 문장을 빼는 것이 사실에 맞게 고치는 것
+    return _without_listed_skills(claim.text) or DELETE  # 코드에 없으면 빼는 것이 사실에 맞다
+
+
+def _without_listed_skills(text: str) -> str | None:
+    """'A·B·C'처럼 나열된 기술만 뺀다. 나열이 아니면 None (문장 전체 삭제 제안)."""
+    aliases = {
+        a for a, canonical in load_taxonomy().aliases().items() if canonical in skills_in_text(text)
+    }
+    out = text
+    for alias in sorted(aliases, key=len, reverse=True):
+        name = re.escape(alias)
+        out = re.sub(rf"{name}\s*[·,/]\s*|\s*[·,/]\s*{name}(?![A-Za-z0-9])", "", out, flags=re.I)
+    return out if out != text else None
 
 
 def find_mismatches(profile: Profile, audits: dict[int, RepoAudit]) -> list[ReconcileItem]:
@@ -238,22 +253,27 @@ def card_targets(
 ) -> list[tuple[Fact, Claim, list[Citation], str]]:
     """면접에서 설명이 필요한 claim: 팀 프로젝트 역할, 수치, 저장소로 확인 불가, AI 도구 사용."""
     checks = {c.claim_id: (rid, c) for rid, a in audits.items() for c in a.claim_checks}
-    out = []
+    per_fact: list[list[tuple[int, tuple[Fact, Claim, list[Citation], str]]]] = []
     for f in profile.evidence_facts():
+        if f.category not in (FactCategory.PROJECT, FactCategory.EXPERIENCE):
+            continue
+        ranked = []
         for c in f.claims:
+            if c.type in (ClaimType.LINK, ClaimType.PERIOD):
+                continue
             rid, chk = checks.get(c.id, (None, None))
             audit = audits.get(rid) if rid else None
-            reasons = []
+            reasons = []  # 면접에서 먼저 물을 만한 순서
             if f.attribution is Attribution.TEAM and c.type is ClaimType.ROLE:
                 reasons.append("팀 프로젝트 역할")
             if c.type is ClaimType.METRIC:
                 reasons.append("수치 성과")
-            if chk is None or chk.result is ClaimResult.UNVERIFIABLE:
-                reasons.append("저장소로 확인 불가")
             if f.implementation in (Implementation.AI_ASSISTED, Implementation.MOSTLY_AI) or (
                 audit and audit.contribution and audit.contribution.ai_coauthored_commits
             ):
                 reasons.append("AI 코딩 도구 사용")
+            if chk is None or chk.result is ClaimResult.UNVERIFIABLE:
+                reasons.append("저장소로 확인 불가")
             if not reasons:
                 continue
             cites = (
@@ -263,8 +283,17 @@ def card_targets(
             if audit and audit.contribution:
                 ac = audit.contribution
                 stats = f"본인 커밋 {ac.user_commits}/{ac.total_commits}, AI 공동 작성 {ac.ai_coauthored_commits}"
-            out.append((f, c, cites, f"{'; '.join(reasons)}. {stats}".strip()))
-    return out[:MAX_CARDS]
+            ranked.append((len(reasons), (f, c, cites, f"{'; '.join(reasons)}. {stats}".strip())))
+        if ranked:
+            per_fact.append(sorted(ranked, key=lambda x: -x[0]))
+    # 앞 항목에 몰리지 않게 항목별로 돌아가며 고른다
+    out = []
+    while per_fact and len(out) < MAX_CARDS:
+        for items in per_fact:
+            if items and len(out) < MAX_CARDS:
+                out.append(items.pop(0)[1])
+        per_fact = [items for items in per_fact if items]
+    return out
 
 
 def interview_cards(
