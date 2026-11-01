@@ -97,6 +97,19 @@ class GitHubSource:
             for d in data
         ]
 
+    def read_file(self, full_name: str, head: str, path: str) -> str | None:
+        """에이전트가 고른 파일을 그때 가져온다. 코드를 실행하지 않고 텍스트만 읽는다."""
+        try:
+            body = self.fetch(f"{RAW}/{full_name}/{head}/{quote(path)}")
+        except GitHubError:
+            return None
+        if len(body) > MAX_FILE_BYTES:
+            return None
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+
     def is_contributor(self, full_name: str, login: str) -> bool:
         """본인 소유가 아닌 저장소(팀 조직, 다른 사용자)에 본인 계정의 커밋이 있는가 (ADR-0006)."""
         try:
