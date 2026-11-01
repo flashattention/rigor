@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from rigor.llm.types import LLMProviderError, LLMRequest, TransientLLMError, Usage
+from rigor.llm.types import (
+    LLMProviderError,
+    LLMRequest,
+    TransientLLMError,
+    TruncatedOutputError,
+    Usage,
+)
 
 _TRANSIENT = {
     "RateLimitError",
@@ -42,15 +48,26 @@ class OpenAIAdapter:
             )
         except Exception as exc:
             raise _classify(exc) from exc
-        text = resp.choices[0].message.content or ""
+        choice = resp.choices[0]
+        text = choice.message.content or ""
         u = resp.usage
         details = getattr(u, "prompt_tokens_details", None)
         cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
-        return text, Usage(
+        usage = Usage(
             input_tokens=u.prompt_tokens - cached,
             output_tokens=u.completion_tokens,
             cache_read_tokens=cached,
         )
+        if getattr(choice, "finish_reason", None) == "length":
+            reasoning = getattr(
+                getattr(u, "completion_tokens_details", None), "reasoning_tokens", 0
+            )
+            raise TruncatedOutputError(
+                f"output truncated at {u.completion_tokens} tokens (reasoning {reasoning}); "
+                "raise max_completion_tokens or lower reasoning_effort in routing.yaml",
+                usage,
+            )
+        return text, usage
 
 
 def _classify(exc: Exception) -> Exception:

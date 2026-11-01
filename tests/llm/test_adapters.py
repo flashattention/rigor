@@ -106,3 +106,23 @@ def test_replay_misses_when_prompt_changes(tmp_path):
     assert recording_key(changed) != recording_key(REQ)
     with pytest.raises(RecordingMissing):
         RecordedAdapter("fake", "replay", directory=tmp_path).complete(changed)
+
+
+def test_openai_length_finish_raises_truncated_with_usage():
+    from rigor.llm.types import TruncatedOutputError
+
+    resp = SimpleNamespace(
+        choices=[SimpleNamespace(finish_reason="length", message=SimpleNamespace(content=""))],
+        usage=SimpleNamespace(
+            prompt_tokens=100,
+            completion_tokens=8000,
+            prompt_tokens_details=None,
+            completion_tokens_details=SimpleNamespace(reasoning_tokens=8000),
+        ),
+    )
+    adapter = OpenAIAdapter(
+        client=SimpleNamespace(chat=SimpleNamespace(completions=Recorder(resp)))
+    )
+    with pytest.raises(TruncatedOutputError) as exc:
+        adapter.complete(REQ)
+    assert exc.value.usage.output_tokens == 8000

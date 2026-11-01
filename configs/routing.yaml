@@ -10,8 +10,9 @@ profiles:
 
   # 단계 1: 남은 OpenAI 크레딧으로 파이프라인 확인만 (공식 기준선 아님).
   # 모델 이름·가격은 사용자 계정에서 확인 후 pricing.yaml의 verified를 true로 바꾼다.
+  # gpt-5 계열은 추론 모델이라 추론 토큰이 출력 한도를 다 쓰면 본문이 빈다 → minimal로 둔다.
   openai_phase1:
-    default: {provider: openai, model: gpt-5-nano, params: {max_completion_tokens: 8000}}
+    default: {provider: openai, model: gpt-5-nano, params: {max_completion_tokens: 16000, reasoning_effort: minimal}}
 
   # 단계 2: Max 포함 API 크레딧. 공식 기준선은 이 프로필로 측정한다.
   anthropic_haiku:

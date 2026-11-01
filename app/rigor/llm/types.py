@@ -73,6 +73,17 @@ class LLMProviderError(LLMError):
     """재시도해도 소용없는 오류 (인증, 잘못된 요청 등)."""
 
 
+class TruncatedOutputError(LLMProviderError):
+    """출력 토큰 한도에 걸려 본문이 잘림/비어 있음. 같은 설정으로 재요청해도 소용없다.
+
+    비용은 이미 발생했으므로 사용량을 함께 싣는다 (클라이언트가 계측한다).
+    """
+
+    def __init__(self, message: str, usage: Usage):
+        super().__init__(message)
+        self.usage = usage
+
+
 class StructuredOutputError(LLMError):
     """재요청 후에도 출력이 스키마 검증을 통과하지 못함."""
 

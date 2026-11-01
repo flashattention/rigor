@@ -99,3 +99,17 @@ def test_unknown_task_is_rejected():
     client = make_client(FakeAdapter())
     with pytest.raises(KeyError):
         client.structured("not_a_task", system="s", messages=[], schema=Answer)
+
+
+def test_truncated_output_is_metered_and_not_retried():
+    from rigor.llm.types import TruncatedOutputError
+
+    fake = FakeAdapter().queue(
+        "jd_parse",
+        [TruncatedOutputError("cut", Usage(output_tokens=8000)), {"label": "a", "score": 0}],
+    )
+    client = make_client(fake)
+    with pytest.raises(TruncatedOutputError):
+        call(client)
+    assert len(fake.requests) == 1
+    assert client.meter.calls == 1

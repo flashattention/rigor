@@ -22,6 +22,7 @@ from rigor.llm.types import (
     LLMResult,
     StructuredOutputError,
     TransientLLMError,
+    TruncatedOutputError,
     Usage,
 )
 
@@ -74,7 +75,12 @@ class LLMClient:
                 json_schema=schema.model_json_schema(),
                 params=dict(route.params),
             )
-            raw, usage, n = self._complete_with_retry(adapter, request)
+            try:
+                raw, usage, n = self._complete_with_retry(adapter, request)
+            except TruncatedOutputError as err:
+                # 비용은 이미 발생했다 → 계측하고, 같은 설정으로 재요청하지 않는다.
+                self.meter.add(task, route.provider, route.model, err.usage)
+                raise
             attempts += n
             total = total + usage
             total_cost += self.meter.add(task, route.provider, route.model, usage)

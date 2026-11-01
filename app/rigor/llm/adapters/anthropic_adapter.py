@@ -9,7 +9,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from rigor.llm.types import LLMProviderError, LLMRequest, TransientLLMError, Usage
+from rigor.llm.types import (
+    LLMProviderError,
+    LLMRequest,
+    TransientLLMError,
+    TruncatedOutputError,
+    Usage,
+)
 
 _TRANSIENT = {
     "RateLimitError",
@@ -53,16 +59,21 @@ class AnthropicAdapter:
             )
         except Exception as exc:
             raise _classify(exc) from exc
-        block = next((b for b in resp.content if getattr(b, "type", None) == "tool_use"), None)
-        if block is None:
-            raise LLMProviderError("response had no tool_use block")
         u = resp.usage
-        return json.dumps(block.input, ensure_ascii=False), Usage(
-            input_tokens=u.input_tokens,
-            output_tokens=u.output_tokens,
+        usage = Usage(
+            input_tokens=getattr(u, "input_tokens", 0) or 0,
+            output_tokens=getattr(u, "output_tokens", 0) or 0,
             cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
             cache_write_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
         )
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            raise TruncatedOutputError(
+                f"output truncated at {usage.output_tokens} tokens; raise max_tokens", usage
+            )
+        block = next((b for b in resp.content if getattr(b, "type", None) == "tool_use"), None)
+        if block is None:
+            raise LLMProviderError("response had no tool_use block")
+        return json.dumps(block.input, ensure_ascii=False), usage
 
 
 def _classify(exc: Exception) -> Exception:
