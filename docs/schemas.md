@@ -54,7 +54,9 @@
 | evidence_links | url[] | | 저장소·배포·논문 등 |
 | linked_repos | RepoRef[] | | Repo Auditor 대조 대상 |
 | disclosable_in_blind | bool | | 블라인드 공고에서 노출 가능 여부 |
-| status | enum `confirmed` \| `unconfirmed` \| `rejected` | | **판정에는 `confirmed`만 사용** |
+| status | enum `confirmed` \| `unconfirmed` \| `revised` \| `unverified` \| `rejected` | | **판정에는 `confirmed`·`revised`만 사용**. `revised` = 정합(D)에서 사실에 맞게 고친 것, `unverified` = 저장소와 불일치했고 사용자가 고치지 않았거나 "나중에"를 고른 것 |
+| claims | Claim[] | | 원자 claim (§4.5) |
+| repo_link | {repo_id?, url?, unlinked_reason?: enum `no_repo` \| `low_quality` \| `forgot` \| `private_or_company`} | | 저장소 연결 단계(B) 결과 |
 | source | enum `resume_extract` \| `user_input` \| `repo_derived` | | |
 
 ### 2.3 추출 시 버리는 항목 (🗑, 저장·표시하지 않음)
@@ -124,11 +126,31 @@
 ### 4.3 ClaimCheck
 | 필드 | 타입 | 설명 |
 |---|---|---|
+| claim_id | str | 대조한 claim (§4.5) |
 | fact_id | str | 대조한 이력서 fact |
 | claim | str | fact 안의 개별 주장 (예: "LangGraph 사용") |
+| method | enum `rule` \| `retrieval` \| `agent` | 판정한 방법. `agent`는 도구 호출 수·토큰을 함께 기록 |
 | result | enum `supported` \| `not_found` \| `contradicted` \| `unverifiable` | `unverifiable` = 저장소로 확인할 수 없는 성격(예: 사내 성과) |
 | evidence | Citation[] | supported/contradicted면 필수 |
 | action | str | "이력서 수정 필요: ..." / "근거 링크 추가" |
+
+### 4.5 Claim (원자 주장)
+`id, fact_id, type: enum tech|feature|metric|role|period|link, text, question: str (검증 가능한 질문으로 바꾼 것, 예: "의존성·import에 langgraph가 있는가"), repo_id?`
+
+### 4.6 CommitIdentity / ContributionAnalysis
+- `CommitIdentity = {github_login, emails[], name_aliases[], confirmed_by_user: bool}` — 커밋 귀속 기준(A6).
+- `ContributionAnalysis = {repo_id, user_commits, total_commits, user_share, areas: {path_prefix, user_changes, total_changes}[], active_period, prs_authored, prs_reviewed, ai_coauthored_commits, agent_bot_prs, caveats: enum[] (squash_merge|pair_programming|bulk_move|unmapped_emails)}` — **판정 입력이 아니다.** 정합 선택지와 면접 준비 카드의 근거로만 쓴다.
+
+### 4.7 UnlinkedItem (저장소 연결 단계)
+`fact_id, candidates: {repo_id, score, reasons[]}[] (상위 3개), user_reason?: enum no_repo|low_quality|forgot|private_or_company, chosen_repo_id?, proposal: enum add_evidence_or_reduce|keep_with_interview_prep|private_audit|link`
+
+### 4.8 ReconciliationDecision (정합 단계)
+`claim_id, mismatch: enum missing_in_code|metric_unsupported|contribution_overstated|ai_assisted_unexplained, options_offered: str[], choice: enum revise_to_fact|implement_then_reaudit|add_evidence|keep_as_is|later, revised_text?, decided_at`
+- `keep_as_is` 를 고르면 fact는 `unverified`가 되고, 리포트에 "근거와 다름"이 표시되며, E7(이력서 업데이트안)은 그 문장을 쓰지 않는다.
+- 선택지에 "사실이 아닌 기여를 쓰는" 옵션은 없다(ADR-0017 정직성 원칙).
+
+### 4.9 InterviewCard (면접 준비 카드)
+`claim_id, likely_questions: str[], evidence_locations: Citation[] (파일·줄·커밋), talking_points: str[], caution?: str` — `talking_points`도 Fact Verifier 대상이다.
 
 ### 4.4 Improvement
 `id, title, description, done_criteria: DoneCriterion[], effort_days: float, impact: enum low|med|high, citations: Citation[] (min 1, 공고 요건 포함 권장)`
