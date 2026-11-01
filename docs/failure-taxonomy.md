@@ -31,3 +31,38 @@
 | F6 | 로드맵 26개, 라이선스 항목 7번 반복 | 후보 저장소까지 대상, 효과/비용 비율 정렬 | 이력서에 연결된 저장소만, 효과 우선, 개수 상한 |
 | F6 | 면접 카드 8장이 전부 첫 항목 | 앞에서부터 자름 | 항목별 순환 선택 |
 | F7 | 자격요건이 전부 소프트 스킬인 공고에서 이력서 자기 서술만으로 충족 100% | 근거 강도 미구분, 주요 업무 미사용 | **미해결** |
+
+## 2026-11-01 코드 주석 작업 중 발견 (합성 입력으로 확인)
+
+| 유형 | 실패 | 원인 | 조치 |
+|---|---|---|---|
+| F2 | 경로나 한글 조사가 붙은 GitHub URL의 계정명이 LLM에 전달 | URL 끝 패턴이 좁음. 본인 이력서 PDF의 링크 7개는 해당 없음 | 정규식 수정 |
+| F4 | 공백·한 글자 인용이 인용 검증 통과 | 빈 문자열은 항상 포함으로 판정 | 식별 가능한 문자열 요구 |
+| F4 | 찾아보지 않은 "근거 없음"도 인정 | 파일이 메모리에 있는지만 확인 | 저장소 전체 grep 요구 |
+| F4 | `led`가 failed, `리드`가 하이브리드에 걸려 "근거와 다름" 가능 | 단어 경계 없음 | 경계 추가 |
+| F4 | "학사 이상 (석사 우대)"를 석사 요구로 읽음, 중퇴를 학위 보유로 처리 | 높은 학위부터 검사, 졸업 상태 미확인 | 가장 낮은 학위를 요구로, 졸업만 보유로. 재학·예정은 LLM 판정 |
+| F5 | 한 저장소의 fact 2개가 근거를 만들면 진단 중단 | 근거 id 중복 | fact 단위로 다시 번호 부여 |
+| F1 | GPL·BSD가 MIT로 판정 | "permitted"의 부분 문자열 | 단어 단위 패턴 |
+
+### 미확인 후보
+코드를 읽고 나온 의심 사항이다. 고치기 전에 하나씩 재현한다.
+
+| 유형 | 후보 | 위치 |
+|---|---|---|
+| F1 | 비밀값 노출이 판정·저장소 연결에 따라 경고에서 빠질 수 있음 | `core/improvements.py`, `report/markdown.py`, `core/repo_verdict.py` |
+| F1 | `/tree/main`이 붙은 저장소 링크가 분석 대상에서 조용히 빠짐, 로그인 대소문자 구분 | `github_audit/selection.py` |
+| F1 | `metric` 주장이 문서 속 숫자 하나로 확인됨 | `github_audit/claims.py` |
+| F1 | docstring 문장 속 `from x`가 의존성으로 잡힘 | `github_audit/signals.py` |
+| F1 | 소스 파일을 작은 순서로 30개만 읽음, 저장소 목록 100개 제한 | `github_audit/api_source.py` |
+| F2 | `github.io` 주소의 계정명 미처리 | `ingest/privacy.py` |
+| F2 | 이름이 여러 개면 매핑 하나만 남음 | `ingest/privacy.py` |
+| F4 | 인젝션 패턴이 "system prompt 설계 경험" 같은 정상 문장을 제거 | `safety/injection.py` |
+| F4 | 민감정보 패턴이 "성별 분류 모델 구현" 줄을 통째로 제거, 학교 패턴이 줄을 넘어 기술 스택까지 제거 | `ingest/privacy.py` |
+| F4 | "매출 신장"이 보호 속성으로 처리 | `nodes/jd_parser.py` |
+| F4 | `OTHER` 결격이 항상 통과해 잘못된 결격이 비추천으로 직행 | `nodes/jd_parser.py` |
+| F5 | 스캔 PDF가 `diagnose`에서 빈 텍스트로 진행 | `cli.py` |
+| F5 | API 타임아웃이 저장소 단위 격리를 통과, 요청 한도 초과를 기여 없음으로 처리 | `github_audit/api_source.py` |
+| F6 | 내부 코드값 `private_audit`가 사용자에게 노출 | `core/improvements.py` 부근 |
+| F7 | 규칙 기준값 일부에 근거 미기재 | `nodes/repo_linking.py`, `core/repo_verdict.py`, `github_audit/claims.py`, `github_audit/contribution.py`, `cli.py` |
+
+평가 코드의 결함은 `evals/reports/agent-dev-2026-11-01.md`에 있다.
