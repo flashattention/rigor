@@ -43,10 +43,13 @@ _SOURCE = re.compile(r"\.(py|ts|tsx|js|go|java|kt|rs)$")
 
 
 class GitHubError(RuntimeError):
+    """GitHub HTTP 요청 실패 (한도 초과, 404, 그 외 상태 코드)."""
+
     pass
 
 
 def default_fetch(url: str) -> bytes:
+    """GITHUB_TOKEN은 API 요청에만 붙인다. HTTP 오류는 GitHubError로, 연결 오류는 그대로 올린다."""
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "rigor-audit"}
     token = os.environ.get("GITHUB_TOKEN")
     if token and url.startswith(API):
@@ -64,6 +67,8 @@ def default_fetch(url: str) -> bytes:
 
 
 class GitHubSource:
+    """GitHub에서 메타데이터·파일·커밋을 읽는다. fetch를 바꿔 끼우면 네트워크 없이 돈다."""
+
     def __init__(self, fetch: Fetch = default_fetch):
         self.fetch = fetch
 
@@ -71,6 +76,7 @@ class GitHubSource:
         return json.loads(self.fetch(url))
 
     def meta(self, full_name: str) -> tuple[RepoMeta, dict]:
+        """RepoMeta와 원본 응답을 함께 돌려준다. default_branch·size는 원본에서 읽는다."""
         data = self._json(f"{API}/repos/{full_name}")
         meta = RepoMeta(
             repo_id=int(data["id"]),
@@ -84,6 +90,7 @@ class GitHubSource:
         return meta, data
 
     def list_user_repos(self, login: str) -> list[RepoMeta]:
+        """login 소유 저장소를 최근 push 순으로 한 페이지(최대 100개)만 가져온다."""
         data = self._json(f"{API}/users/{quote(login)}/repos?per_page=100&type=owner&sort=pushed")
         return [
             RepoMeta(
@@ -120,6 +127,10 @@ class GitHubSource:
             return False
 
     def snapshot(self, full_name: str) -> RepoSnapshot:
+        """기본 브랜치 HEAD의 스냅샷. 내용은 판단용 파일과 작은 소스 파일부터 상한까지만 읽는다.
+
+        개별 파일 실패는 건너뛰지만, 메타·트리·커밋 요청 실패는 GitHubError로 올라간다.
+        """
         meta, raw = self.meta(full_name)
         branch = raw.get("default_branch") or "main"
         head = self._json(f"{API}/repos/{full_name}/commits/{quote(branch)}")["sha"]
@@ -162,6 +173,7 @@ class GitHubSource:
                 break
             for c in batch:
                 author = c["commit"]["author"]
+                # GitHub 계정에 연결되지 않은 커밋은 최상위 author가 null이다
                 account = c.get("author") or {}
                 commits.append(
                     CommitInfo(

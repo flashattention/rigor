@@ -44,6 +44,7 @@ def audit_repo(
     facts: list[Fact],
     exposure: ExposureContext,
 ) -> RepoAuditResult:
+    """저장소 하나를 LLM 없이 감사한다. 규칙이 보류한 claim은 pending으로 돌려준다."""
     signals = compute_signals(snap, identity)
     contribution = analyze_contribution(snap, identity)
     checks, evidence, pending = [], [], []

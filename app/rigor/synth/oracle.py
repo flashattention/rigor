@@ -25,6 +25,7 @@ def _ym(d) -> str | None:
 
 
 def profile_draft(case: Case, mask: MaskResult) -> ProfileDraft:
+    """케이스의 fact를 LLM 초안 형태로 되돌린다. 저장소 URL은 마스킹 토큰으로 적는다."""
     url_to_token = {url: token for token, url in mask.repo_urls.items()}
     facts = []
     for f in case.profile.facts:
@@ -92,6 +93,7 @@ def verdicts_draft(case: Case) -> VerdictsDraft:
 
 
 def cards_draft(request_text: str) -> CardsDraft:
+    """요청 문구에 나온 claim id마다 고정 문구의 카드를 만든다."""
     ids = dict.fromkeys(re.findall(r"\[(c_[A-Za-z0-9_]+)\]", request_text))
     return CardsDraft(
         cards=[
@@ -106,6 +108,7 @@ def cards_draft(request_text: str) -> CardsDraft:
 
 
 def projects_draft(request_text: str) -> ProjectsDraft:
+    """요청 문구에 나온 요건 id마다 고정 문구의 프로젝트를 만든다."""
     ids = dict.fromkeys(re.findall(r"\[(r_[0-9]+)\]", request_text))
     return ProjectsDraft(
         items=[
@@ -126,6 +129,8 @@ def projects_draft(request_text: str) -> ProjectsDraft:
 
 
 def oracle_adapter(case: Case, mask: MaskResult | None = None) -> FakeAdapter:
+    """정답을 돌려주는 FakeAdapter. mask가 없으면 fact_extract는 등록하지 않는다."""
+
     def text(req) -> str:
         return "".join(m["content"] for m in req.messages)
 

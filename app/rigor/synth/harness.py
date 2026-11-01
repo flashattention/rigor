@@ -24,6 +24,7 @@ def meta_of(spec: RepoSpec) -> RepoMeta:
 
 
 def snapshots(case: Case, root: Path) -> dict[int, RepoSnapshot]:
+    """케이스의 저장소를 root 아래 실제 git으로 만들고 repo_id별 스냅샷을 돌려준다."""
     paths = materialize_all(case.repos, root)
     return {rid: snapshot_local(path, meta_of(case.repo(rid))) for rid, path in paths.items()}
 

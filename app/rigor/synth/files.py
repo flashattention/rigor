@@ -42,6 +42,7 @@ def py_module(imports: list[str], body: str) -> str:
 
 
 def test_file(target: str) -> str:
+    """항상 통과하는 테스트 파일. 테스트가 있다는 신호만 심는다."""
     return f"from {target} import *  # noqa\n\n\ndef test_smoke():\n    assert True\n"
 
 

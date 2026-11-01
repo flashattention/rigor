@@ -69,6 +69,7 @@ def skills_in_text(text: str) -> set[str]:
     tax = load_taxonomy()
     found = set()
     lowered = text.lower()
+    # 경계는 영숫자만 본다: "Python으로"처럼 조사가 붙어도 잡힌다
     for alias, canonical in tax.aliases().items():
         if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", lowered):
             found.add(canonical)
@@ -80,6 +81,8 @@ def _numbers(text: str) -> list[str]:
 
 
 class _Evidence:
+    """fact 하나를 검사하며 근거를 모은다. id는 이 인스턴스 안에서만 유일하다."""
+
     def __init__(self, repo_id: int):
         self.repo_id = repo_id
         self.items: list[RepoEvidence] = []
@@ -102,6 +105,8 @@ class _Evidence:
 def _find(
     snap: RepoSnapshot, needle: str, paths: list[str] | None = None
 ) -> tuple[str, int, str] | None:
+    """needle이 처음 나오는 (경로, 줄 번호, 줄 내용). 대소문자는 무시한다."""
+    # 앞의 "."까지 막아 82가 0.82 안에서 일치하지 않게 한다
     pattern = re.compile(rf"(?<![A-Za-z0-9.]){re.escape(needle)}(?![A-Za-z0-9])", re.IGNORECASE)
     for path in paths or sorted(snap.files):
         text = snap.files.get(path, "")
@@ -113,6 +118,7 @@ def _find(
 
 
 def _overlaps(fact: Fact, period: tuple[str, str] | None) -> bool | None:
+    """fact 기간과 커밋 기간이 겹치는가. 어느 쪽이든 기간을 전혀 모르면 None."""
     if not period or not (fact.period.start or fact.period.end):
         return None
     start = fact.period.start or date.min
@@ -149,6 +155,10 @@ def check_claims_by_rules(
     signals: RepoSignals | None,
     contribution: ContributionAnalysis | None,
 ) -> ClaimRuleResult:
+    """fact의 claim을 유형별 규칙으로 판정한다 (표는 모듈 docstring). snap이 없으면 전부 unverifiable.
+
+    판단하지 못한 claim은 checks가 아니라 pending으로 돌려준다.
+    """
     if snap is None:
         checks = [
             ClaimCheck(
@@ -235,6 +245,7 @@ def check_claims_by_rules(
                 if any(key in a.path_prefix.lower() for k in areas for key in _AREA_WORDS[k]):
                     area_user += a.user_changes
                     area_total += a.total_changes
+            # API 스냅샷은 변경 통계가 없어 areas가 비므로 영역 규칙은 적용되지 않는다
             if share >= 0.999:
                 done(c, ClaimResult.SUPPORTED, [stat])
             elif _OWNERSHIP.search(c.text) and share < LOW_SHARE:

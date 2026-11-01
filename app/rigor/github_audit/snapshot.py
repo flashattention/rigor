@@ -39,6 +39,8 @@ class FileChange:
 
 @dataclass(frozen=True)
 class CommitInfo:
+    """커밋 하나. author_email은 소스가 소문자로 정규화해 넣는다."""
+
     sha: str
     author_name: str
     author_email: str

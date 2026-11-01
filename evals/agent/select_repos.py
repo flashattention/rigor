@@ -20,6 +20,7 @@ from rigor.github_audit.api_source import API, GitHubError, default_fetch
 
 LANGUAGES = {"Python": (".py",), "TypeScript": (".ts", ".tsx")}
 PER_LANGUAGE = 6
+# 작으면 탐색할 일이 없고, 크면 비용이 크다 (docs/evals-agent-design.md)
 MIN_CODE_FILES, MAX_CODE_FILES = 20, 300
 QUERY = "language:{lang} license:mit license:apache-2.0 license:bsd-3-clause stars:50..500 pushed:>2026-01-01 fork:false archived:false"
 _EXCLUDE_NAME = re.compile(
@@ -30,6 +31,7 @@ OUT = Path("data/private/evals/repos.json")
 
 
 def eligible(meta: dict, paths: list[str], extensions: tuple[str, ...], exclude_owner: str) -> bool:
+    """포크·보관·제외 소유자·튜토리얼류 이름을 거르고 코드 파일 수 범위를 본다."""
     if meta.get("fork") or meta.get("archived") or meta["owner"]["login"] == exclude_owner:
         return False
     if _EXCLUDE_NAME.search(meta["name"]) or _EXCLUDE_NAME.search(meta.get("description") or ""):
@@ -48,6 +50,10 @@ def order_key(full_name: str) -> str:
 
 
 def select(fetch=default_fetch, exclude_owner: str = "flashattention") -> list[dict]:
+    """언어별로 별 수 순서의 앞에서 기준에 맞는 저장소를 모아 dev/test로 나눈다.
+
+    트리가 잘린 저장소는 코드 파일 수를 셀 수 없어 건너뛴다.
+    """
     chosen: list[dict] = []
     for lang, extensions in LANGUAGES.items():
         found: list[dict] = []

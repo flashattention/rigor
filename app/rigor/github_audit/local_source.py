@@ -14,6 +14,7 @@ from rigor.github_audit.snapshot import CommitInfo, FileChange, RepoMeta, RepoSn
 
 MAX_FILE_BYTES = 200_000
 MAX_TOTAL_BYTES = 3_000_000
+# 분석 대상 저장소의 훅과 fsmonitor 설정이 명령을 실행하지 못하게 막는다
 _SAFE = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"]
 _SEP = "\x1e"  # 커밋 구분자
 _FIELD = "\x1f"
@@ -31,6 +32,7 @@ def _git(path: Path, *args: str) -> str:
 
 
 def _commits(path: Path) -> list[CommitInfo]:
+    """git log와 numstat을 파싱한다. 구분자가 제어 문자라 커밋 메시지 내용과 섞이지 않는다."""
     fmt = f"{_SEP}%H{_FIELD}%an{_FIELD}%ae{_FIELD}%aI{_FIELD}%B{_FIELD}"
     raw = _git(path, "log", f"--format={fmt}", "--numstat", "--no-renames")
     commits = []
@@ -60,6 +62,10 @@ def _commits(path: Path) -> list[CommitInfo]:
 
 
 def snapshot_local(path: Path, meta: RepoMeta) -> RepoSnapshot:
+    """git이 추적하는 파일을 작업 트리에서 읽는다.
+
+    심볼릭 링크, 상한 초과, UTF-8이 아닌 파일은 paths에 남고 files에서만 빠진다.
+    """
     head = _git(path, "rev-parse", "HEAD").strip()
     paths = [p for p in _git(path, "ls-files", "-z").split("\0") if p]
     files: dict[str, str] = {}

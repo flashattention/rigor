@@ -18,6 +18,7 @@ def _repo_text(case: Case, repo_id: int) -> str:
 
 
 def validate_case(case: Case) -> list[str]:
+    """케이스 하나를 대조한다. 없는 claim·저장소 id를 참조하면 목록 대신 예외가 날 수 있다."""
     problems: list[str] = []
     t = case.truth
     repo_ids = {r.repo_id for r in case.repos}
@@ -97,6 +98,7 @@ def validate_case(case: Case) -> list[str]:
         share = repo.user_commit_count() / len(repo.commits)
         if abs(share - rt.user_share) > 1e-9:
             problems.append(f"repo {rt.repo_id} user_share {rt.user_share} != computed {share}")
+        # identity.emails의 첫 항목을 GitHub 계정 이메일로, 나머지를 별칭으로 본다
         account = set(case.profile.identity.emails[:1]) if case.profile.identity else set()
         if rt.user_share_without_aliases is not None:
             only_account = sum(1 for c in repo.commits if repo.author(c.author).email in account)

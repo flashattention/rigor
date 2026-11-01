@@ -54,6 +54,9 @@ def _benign(match: str, path: str, text: str) -> bool:
 
 
 def scan_exposure(snap: RepoSnapshot, ctx: ExposureContext) -> list[ExposureFinding]:
+    """snap.files의 현재 내용만 훑는다. 읽지 않은 파일과 커밋 이력은 보지 않으므로
+    발견이 없어도 안전하다는 뜻은 아니다.
+    """
     findings: list[ExposureFinding] = []
     pii = [
         (ExposureKind.REAL_NAME, ctx.names, "실명"),

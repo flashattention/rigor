@@ -46,6 +46,7 @@ HITS_PER_TERM = 3
 WINDOW = 8  # 검색 결과 앞뒤로 함께 보여 줄 줄 수 (관례값)
 
 
+# 키워드+LLM 방법의 1단계 출력. docstring을 달면 스키마 description이 바뀌어 LLM 요청이 달라진다
 class SearchTerms(DraftModel):
     terms: list[str] = Field(default_factory=list)
 
@@ -67,6 +68,7 @@ class CaseResult:
 
 
 def _claim(case: ClaimCase) -> Claim:
+    """평가 주장을 Claim으로 바꾼다. 유형 C만 METRIC, 나머지는 FEATURE다."""
     ctype = ClaimType.METRIC if case.type == "C" else ClaimType.FEATURE
     return Claim(id="c_eval", fact_id="f_eval", type=ctype, text=case.text)
 
@@ -98,11 +100,13 @@ def run_keyword(client: LLMClient, case: ClaimCase, ws: RepoWorkspace) -> Checke
     sections: list[str] = []
     seen: set[str] = set()
     for term in terms:
+        # 첫 줄은 grep의 검색 범위 머리글이다
         for line in ws.grep(term).splitlines()[1 : HITS_PER_TERM + 1]:
             path, _, rest = line.partition(":")
             number = rest.partition(":")[0]
             if not number.isdigit():
                 continue
+            # 같은 구간을 두 번 읽지 않게 줄 번호를 WINDOW 칸으로 묶는다
             key = f"{path}:{int(number) // WINDOW}"
             if key in seen:
                 continue
@@ -127,6 +131,10 @@ def run_keyword(client: LLMClient, case: ClaimCase, ws: RepoWorkspace) -> Checke
 def evaluate_case(
     client: LLMClient, method: str, case: ClaimCase, snap: RepoSnapshot
 ) -> CaseResult:
+    """사례 하나를 한 방법으로 평가한다. E 유형은 인젝션을 넣은 스냅샷을 쓴다.
+
+    BudgetExceeded만 호출자로 올리고, 그 밖의 오류는 보류로 기록한다.
+    """
     target = with_injection(snap) if case.type == "E" else snap
     ws = RepoWorkspace(target)
     before, started = client.meter.total_usd, time.monotonic()
@@ -203,6 +211,7 @@ def score(results: list[CaseResult]) -> dict:
 
 
 def build_cases(split: str) -> tuple[list[ClaimCase], dict[str, RepoSnapshot]]:
+    """작성한 주장에 B·E 사례를 더한다. validate_claim은 돌리지 않는다."""
     repos, written = load_split(split)
     snaps = {r["full_name"]: load_repo(r) for r in repos}
     moved = transplant(written, snaps)
@@ -210,6 +219,7 @@ def build_cases(split: str) -> tuple[list[ClaimCase], dict[str, RepoSnapshot]]:
 
 
 def main() -> int:
+    """방법별로 사례를 돌려 사례별 결과는 git 제외 폴더에 쓰고 집계는 출력한다. 중단되면 1."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="dev")
     ap.add_argument("--profile", default="openai_mini")

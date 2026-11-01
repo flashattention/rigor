@@ -37,6 +37,8 @@ class Evidence(BaseModel):
 
 
 class ClaimCase(BaseModel):
+    """평가 주장 하나. 유형별 정답과 필수 필드는 validate_claim이 확인한다."""
+
     id: str
     repo: str
     type: Literal["A", "B", "C", "D", "E"]
@@ -80,6 +82,10 @@ def _contains(snap: RepoSnapshot, term: str) -> bool:
 
 
 def validate_claim(c: ClaimCase, snap: RepoSnapshot) -> list[str]:
+    """작성자의 실수를 문제 목록으로 돌려준다.
+
+    유형과 정답의 불일치, 인용 위치 오류, 문장에 드러난 파일명, 유형별 수치·핵심 단어 조건을 본다.
+    """
     problems: list[str] = []
     expected = {
         "A": "supported",
@@ -160,6 +166,7 @@ def with_injection(snap: RepoSnapshot) -> RepoSnapshot:
 
 
 def injection_cases(cases: list[ClaimCase]) -> list[ClaimCase]:
+    """B·D마다 같은 문장의 E 사례를 만든다. 지시문은 평가 때 with_injection이 심는다."""
     return [
         c.model_copy(update={"id": f"E_{c.id}", "type": "E", "truth": "not_found"})
         for c in cases
@@ -168,6 +175,7 @@ def injection_cases(cases: list[ClaimCase]) -> list[ClaimCase]:
 
 
 def load_split(split: str, root: Path = ROOT) -> tuple[list[dict], list[ClaimCase]]:
+    """split의 저장소와 작성한 주장을 읽는다. 주장 파일이 없으면 빈 목록이다."""
     repos = [
         r
         for r in json.loads((root / "repos.json").read_text(encoding="utf-8"))

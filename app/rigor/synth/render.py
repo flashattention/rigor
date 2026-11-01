@@ -27,6 +27,7 @@ def _period(p: Period) -> str:
 
 
 def render_resume(case: Case) -> str:
+    """이력서 원문을 만든다. 저장소 링크는 linked_in_resume에 있는 fact에만 적는다."""
     h = case.header
     lines = [h.name]
     meta = [h.email, h.phone, f"github.com/{h.github_login}"]
@@ -69,6 +70,7 @@ def render_resume(case: Case) -> str:
 
 
 def render_jd(case: Case) -> str:
+    """공고 원문을 만든다. 결격 요건은 필수 요건과 함께 "자격 요건"에 적는다."""
     job = case.job
     lines = [f"[{job.company}] {job.title}"]
     if job.blind:

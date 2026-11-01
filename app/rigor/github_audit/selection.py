@@ -27,6 +27,11 @@ class Selection:
 
 
 def select_repos(profile: Profile, owned: list[RepoMeta], login: str, is_contributor) -> Selection:
+    """이력서 링크 저장소와 링크 없는 항목의 상위 후보를 고른다.
+
+    is_contributor(full_name, login)는 소유가 아닌 링크에만 호출한다. 본인 것이 아니면
+    skipped_not_mine에 담고, 저장소 주소로 끝나지 않는 URL은 결과 어디에도 남기지 않는다.
+    """
     owned_names = {m.full_name.lower(): m.full_name for m in owned}
     chosen: dict[str, None] = {}
     skipped = []

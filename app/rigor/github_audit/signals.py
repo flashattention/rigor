@@ -57,6 +57,7 @@ def readme_path(snap: RepoSnapshot) -> str | None:
 
 
 def readme_signals(snap: RepoSnapshot) -> ReadmeSignals:
+    """루트 README의 길이와 제목에서 찾은 섹션. 내용을 못 가져왔으면 exists만 채운다."""
     path = readme_path(snap)
     if not path or path not in snap.files:
         return ReadmeSignals(exists=bool(path))
@@ -104,6 +105,7 @@ def dependencies(snap: RepoSnapshot) -> list[str]:
 
 
 def compute_signals(snap: RepoSnapshot, identity: CommitIdentity | None = None) -> RepoSignals:
+    """스냅샷에서 결정론 신호를 모두 센다. identity가 없으면 본인 커밋 관련 값은 0이다."""
     tests = [p for p in snap.paths if _TEST_PATH.search(p)]
     deps = dependencies(snap)
     frameworks = [f for f in ("pytest", "jest", "vitest", "unittest") if f in deps]
@@ -122,6 +124,7 @@ def compute_signals(snap: RepoSnapshot, identity: CommitIdentity | None = None) 
     for p in snap.paths:
         ext = PurePosixPath(p).suffix.lower()
         if ext in _LANG:
+            # 내용을 안 가져온 파일도 1로 세어 언어 목록에서 빠지지 않게 한다
             langs[_LANG[ext]] += len(snap.files.get(p, "")) or 1
     emails = {e.lower() for e in identity.emails} if identity else set()
     user_commits = [c for c in snap.commits if c.author_email in emails]

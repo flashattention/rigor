@@ -21,6 +21,7 @@ INJECTION_SITES: tuple[InjectionSite, ...] = ("resume", "jd", "readme", "code_co
 
 
 def counterfactuals(case: Case) -> list[Case]:
+    """이름·성별 단서, 학교, 출생 연도의 조합마다 변형을 만든다 (8개). 정답은 그대로다."""
     out = []
     for (name, gender), school, year in product(NAMES, SCHOOLS, BIRTH_YEARS):
         header = case.header.model_copy(
@@ -52,6 +53,7 @@ def _replace_in_repo(repo: RepoSpec, old: str, new: str) -> RepoSpec:
 
 
 def inject(case: Case, site: InjectionSite) -> Case:
+    """지시문을 심은 변형을 만든다. 정답은 그대로다. 저장소 쪽은 이력서에 링크된 첫 저장소에 심는다."""
     update: dict = {
         "case_id": f"{case.case_id}__inj_{site}",
         "tags": [*case.tags, "injection", f"injection:{site}"],

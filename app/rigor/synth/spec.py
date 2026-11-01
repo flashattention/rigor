@@ -34,6 +34,7 @@ class CommitSpec(BaseModel):
 
     @property
     def ai_coauthored(self) -> bool:
+        """contribution.is_ai_coauthored와 같은 마커로 판정한다."""
         return any(
             t.lower().startswith("co-authored-by:")
             and any(m in t.lower() for m in AI_COAUTHOR_MARKERS)
@@ -63,6 +64,7 @@ class RepoSpec(BaseModel):
         return next(a for a in self.authors if a.key == key)
 
     def final_files(self) -> dict[str, str]:
+        """커밋을 순서대로 적용한 뒤 남는 파일."""
         files: dict[str, str] = {}
         for c in self.commits:
             files.update(c.files)
@@ -114,6 +116,8 @@ class RepoTruth(BaseModel):
 
 
 class GroundTruth(BaseModel):
+    """케이스의 구성상 정답. 데이터와 일치하는지는 validate_case가 확인한다."""
+
     verdicts: dict[str, VerdictStatus]
     verdict_support: dict[str, list[str]] = Field(default_factory=dict)  # 요건 → 정답 근거 fact
     critical_gap_requirements: list[str] = Field(default_factory=list)
@@ -127,6 +131,8 @@ class GroundTruth(BaseModel):
 
 
 class Case(BaseModel):
+    """합성 케이스 하나: 입력(이력서 헤더, 프로필, 공고, 저장소)과 정답."""
+
     case_id: str
     description: str
     tags: list[str] = Field(default_factory=list)

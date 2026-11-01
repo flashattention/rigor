@@ -19,6 +19,7 @@ _SQUASH = re.compile(r"\(#\d+\)\s*$", re.MULTILINE)
 
 
 def area_of(path: str, depth: int = 2) -> str:
+    """경로를 앞쪽 디렉터리 depth단으로 묶는다. 최상위 파일은 "(root)"."""
     parts = PurePosixPath(path).parts
     if len(parts) <= 1:
         return "(root)"
@@ -26,6 +27,7 @@ def area_of(path: str, depth: int = 2) -> str:
 
 
 def is_ai_coauthored(c: CommitInfo) -> bool:
+    """커밋 메시지의 Co-authored-by 줄만 본다."""
     for line in c.message.lower().splitlines():
         if line.startswith("co-authored-by:") and any(m in line for m in AI_COAUTHOR_MARKERS):
             return True
@@ -33,12 +35,17 @@ def is_ai_coauthored(c: CommitInfo) -> bool:
 
 
 def analyze_contribution(snap: RepoSnapshot, identity: CommitIdentity) -> ContributionAnalysis:
+    """확인된 이메일로 커밋을 귀속해 영역별 변경, 활동 기간, 왜곡 가능성을 낸다.
+
+    API 스냅샷은 변경 통계가 없어 areas가 비고 BULK_MOVE도 잡히지 않는다.
+    """
     emails = {e.lower() for e in identity.emails}
     mine = [c for c in snap.commits if c.author_email in emails]
     user_changes: dict[str, int] = defaultdict(int)
     total_changes: dict[str, int] = defaultdict(int)
     for c in snap.commits:
         for ch in c.changes:
+            # 바이너리 파일은 numstat이 "-"라 0/0으로 들어온다. 변경 사실은 1로 남긴다
             n = ch.additions + ch.deletions or 1
             area = area_of(ch.path)
             total_changes[area] += n

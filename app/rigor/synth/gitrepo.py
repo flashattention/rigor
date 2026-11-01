@@ -8,6 +8,7 @@ from pathlib import Path
 
 from rigor.synth.spec import RepoSpec
 
+# 개발자 환경의 훅·서명 설정이 합성 커밋 생성에 끼어들지 않게 한다
 _GIT_SAFE = ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"]
 
 
@@ -22,6 +23,7 @@ def _git(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
 
 
 def materialize(repo: RepoSpec, root: Path) -> Path:
+    """커밋 명세를 순서대로 실제 커밋으로 남긴다. 저장소 경로가 이미 있으면 FileExistsError."""
     path = root / repo.owner / repo.name
     path.mkdir(parents=True, exist_ok=False)
     _git(["init", "-q", "-b", "main"], path)
