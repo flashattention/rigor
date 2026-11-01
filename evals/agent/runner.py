@@ -128,7 +128,7 @@ def run_keyword(client: LLMClient, case: ClaimCase, ws: RepoWorkspace) -> Checke
         ],
         schema=VerdictSubmission,
     ).value
-    return check_submission(ws, verdict.model_dump(mode="json"))
+    return check_submission(ws, verdict.model_dump(mode="json"), case.text)
 
 
 def evaluate_case(

@@ -46,6 +46,7 @@ class CheckedVerdict:
 
 # 공백·기호·한두 글자는 어느 파일에나 있어 출처를 증명하지 못한다
 _IDENTIFYING = re.compile(r"[^\W_]{3,}")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 def _squash(text: str) -> str:
@@ -66,7 +67,22 @@ def citation_holds(ws: RepoWorkspace, c: CitationDraft) -> bool:
     return bool(_IDENTIFYING.search(quote)) and quote in window
 
 
-def check_submission(ws: RepoWorkspace, arguments: dict[str, Any]) -> CheckedVerdict:
+def _plain_number(text: str) -> str:
+    return re.sub(r"(?<=\d),(?=\d{3})", "", text)
+
+
+def numbers_cited(claim_text: str, citations: list[CitationDraft]) -> bool:
+    """주장 문장의 숫자가 전부 인용문에 있는가. 주장 유형이 아니라 문장만 본다."""
+    quotes = _plain_number(" ".join(c.quote for c in citations))
+    return all(
+        re.search(rf"(?<![\d.]){re.escape(n)}(?![\d]|\.\d)", quotes)
+        for n in _NUMBER.findall(_plain_number(claim_text))
+    )
+
+
+def check_submission(
+    ws: RepoWorkspace, arguments: dict[str, Any], claim_text: str
+) -> CheckedVerdict:
     """submit_verdict의 인자를 검증한다. 형식이 틀리면 unverifiable."""
     try:
         sub = VerdictSubmission.model_validate(arguments)
@@ -77,6 +93,13 @@ def check_submission(ws: RepoWorkspace, arguments: dict[str, Any]) -> CheckedVer
     result, reason, downgraded = sub.result, sub.reason, False
     if result in (ClaimResult.SUPPORTED, ClaimResult.CONTRADICTED) and not verified:
         result, reason, downgraded = ClaimResult.UNVERIFIABLE, "인용을 파일에서 확인하지 못함", True
+    elif result is ClaimResult.SUPPORTED and not numbers_cited(claim_text, verified):
+        # 관련 코드만 찾고 숫자가 다른 주장을 통과시키는 실패를 막는다 (조정용 실행 C 유형 3건)
+        result, reason, downgraded = (
+            ClaimResult.UNVERIFIABLE,
+            "주장의 수치를 인용에서 찾지 못함",
+            True,
+        )
     elif result is ClaimResult.NOT_FOUND and not ws.grepped_all:
         result, reason, downgraded = ClaimResult.UNVERIFIABLE, "저장소를 다 살피지 못함", True
     return CheckedVerdict(result, reason, verified, rejected, downgraded)

@@ -107,6 +107,10 @@ def test_closing_tag_inside_a_repo_file_cannot_break_out_of_the_data_block():
     assert execute_tool(w, call("read_file", path="x.md")).count("</tool_output>") == 1
 
 
+def check(w, arguments, claim="FAISS로 벡터 검색 구현"):
+    return check_submission(w, arguments, claim)
+
+
 def cite(path="src/retrieval.py", line=4, quote="faiss.IndexFlatL2(8)"):
     return {"path": path, "line": line, "quote": quote}
 
@@ -114,17 +118,17 @@ def cite(path="src/retrieval.py", line=4, quote="faiss.IndexFlatL2(8)"):
 def test_supported_with_a_real_citation_from_an_opened_file_is_accepted():
     w = ws()
     w.read_file("src/retrieval.py")
-    v = check_submission(w, {"result": "supported", "reason": "r", "citations": [cite()]})
+    v = check(w, {"result": "supported", "reason": "r", "citations": [cite()]})
     assert v.result is ClaimResult.SUPPORTED and len(v.verified) == 1
 
 
 def test_forged_quote_or_unopened_file_or_wrong_line_is_downgraded():
     w = ws()
     # 열지 않은 파일
-    assert check_submission(w, {"result": "supported", "citations": [cite()]}).downgraded
+    assert check(w, {"result": "supported", "citations": [cite()]}).downgraded
     w.read_file("src/retrieval.py")
     for bad in (cite(quote="import langgraph"), cite(line=1), cite(path="README.md")):
-        v = check_submission(w, {"result": "supported", "citations": [bad]})
+        v = check(w, {"result": "supported", "citations": [bad]})
         assert v.result is ClaimResult.UNVERIFIABLE and v.downgraded
 
 
@@ -132,36 +136,62 @@ def test_forged_quote_or_unopened_file_or_wrong_line_is_downgraded():
 def test_quote_without_identifying_text_is_downgraded(quote):
     w = ws()
     w.read_file("src/retrieval.py")
-    v = check_submission(w, {"result": "supported", "citations": [cite(quote=quote)]})
+    v = check(w, {"result": "supported", "citations": [cite(quote=quote)]})
     assert v.result is ClaimResult.UNVERIFIABLE and v.downgraded
+
+
+@pytest.mark.parametrize(
+    ("claim", "accepted"),
+    [
+        ("인덱스 차원은 8이다", True),
+        ("인덱스 차원은 9이다", False),
+        ("인덱스 차원은 8이고 검색 상위 16개를 쓴다", False),
+        ("차원이 8.5인 인덱스", False),
+        ("숫자 없는 벡터 검색 주장", True),
+    ],
+)
+def test_numbers_in_the_claim_must_appear_in_the_citation(claim, accepted):
+    w = ws()
+    w.read_file("src/retrieval.py")
+    v = check(w, {"result": "supported", "citations": [cite()]}, claim)
+    assert (v.result is ClaimResult.SUPPORTED) is accepted
+
+
+def test_comma_in_numbers_is_ignored():
+    w = ws(paths=["a.py"], files={"a.py": "LIMIT = 1000\n"})
+    w.read_file("a.py")
+    citation = {"path": "a.py", "line": 1, "quote": "LIMIT = 1000"}
+    v = check(w, {"result": "supported", "citations": [citation]}, "상한은 1,000건이다")
+    assert v.result is ClaimResult.SUPPORTED
 
 
 def test_supported_without_citation_and_malformed_submission_are_downgraded():
     w = ws()
-    assert check_submission(w, {"result": "supported", "reason": "믿어줘"}).downgraded
-    assert check_submission(w, {"result": "합격"}).result is ClaimResult.UNVERIFIABLE
+    assert check(w, {"result": "supported", "reason": "믿어줘"}).downgraded
+    assert check(w, {"result": "합격"}).result is ClaimResult.UNVERIFIABLE
 
 
 def test_not_found_needs_a_search_of_every_file():
     w = ws()
-    assert check_submission(w, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
+    assert check(w, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
     w.grep("redis")
-    assert check_submission(w, {"result": "not_found"}).result is ClaimResult.NOT_FOUND
+    assert check(w, {"result": "not_found"}).result is ClaimResult.NOT_FOUND
 
     scoped = ws()
     scoped.grep("redis", prefix="src/")
-    assert check_submission(scoped, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
+    assert check(scoped, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
 
     partial = ws(paths=[*FILES, "unread.py"])
     partial.grep("redis")
-    assert check_submission(partial, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
+    assert check(partial, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
 
 
 def test_checked_verdict_converts_to_claim_check_with_evidence():
     w = ws()
     w.read_file("src/retrieval.py")
-    v = check_submission(w, {"result": "supported", "reason": "r", "citations": [cite()]})
+    v = check(w, {"result": "supported", "reason": "r", "citations": [cite()]})
     claim = Claim(id="c_1", fact_id="f_1", type=ClaimType.FEATURE, text="벡터 검색")
-    check, evidence = to_claim_check(claim, v, 7)
-    assert check.method.value == "agent" and check.evidence[0].ref_id == evidence[0].id
+    claim_check, evidence = to_claim_check(claim, v, 7)
+    assert claim_check.method.value == "agent"
+    assert claim_check.evidence[0].ref_id == evidence[0].id
     assert evidence[0].path == "src/retrieval.py"

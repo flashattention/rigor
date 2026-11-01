@@ -100,7 +100,7 @@ def verify_claim(
         # 제출이 있으면 같은 턴의 다른 도구 호출은 실행하지 않는다
         for call in turn.tool_calls:
             if call.name == SUBMIT:
-                verdict = check_submission(ws, call.arguments)
+                verdict = check_submission(ws, call.arguments, claim.text)
                 return finish(verdict, "submitted")
 
         messages.append(AgentMessage("assistant", text=turn.text, tool_calls=turn.tool_calls))
