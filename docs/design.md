@@ -26,7 +26,7 @@
 |---|---|---|---|---|
 | JD Parser, Requirement Matcher, Candid Reviewer(+갭 분류), Project Planner | CLI | 그래프·HITL | 웹 | 개선 |
 | Repo Auditor | 공개 저장소, 토큰 없이/개인 토큰 | GitHub App, 비공개 선택, clone 격리 | 웹 연결 | — |
-| Profile Builder | 텍스트·PDF 추출 + CLI 확인 | interrupt 기반 확인 | 웹 확인 화면 | — |
+| Profile Builder | 텍스트·PDF·DOCX → HWP/HWPX → 스캔 PDF·이미지(로컬 OCR) 순서로 추출 + CLI 확인 (ADR-0011) | interrupt 기반 확인 | 웹 확인 화면 | — |
 | Fact Verifier, Policy & Safety Checker | — | O | O | — |
 | Resume Tailor | — | — | 선택 | O |
 | 매칭 (Retrieval + Reranker) | — | — | — | 설계 유지, 이연 |

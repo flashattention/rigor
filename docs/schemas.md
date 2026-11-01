@@ -34,7 +34,6 @@
 | preferences | {locations[], work_type[], company_size[]} | | 매칭(M4) 전까지는 저장만 |
 | available_hours_per_week | int? | | 로드맵 범위 조정 |
 | deadline | date? | | 목표 마감일 |
-| tone | enum `direct` \| `gentle` | | 진단 강도. **판정에는 영향 없음** |
 | facts | Fact[] | | |
 
 ### 2.2 Fact
