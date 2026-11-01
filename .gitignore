@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Local data (never commit real resumes or personal data)
+data/private/
+*.pdf
+!docs/**/*.pdf
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
