@@ -79,7 +79,7 @@
 8. **Repo Auditor (서브그래프)**: GitHub API로 저장소 메타데이터·README·파일 트리·커밋 이력 수집 → 필요 시 **샌드박스에서 얕은 clone**(코드는 신뢰할 수 없는 입력이므로 **실행하지 않고 정적 분석만**: 파일 구조, 의존성, 테스트·CI 파일, 비밀값 패턴, 언어 비율, git blame) → 이력서 claim과 대조 → 품질 루브릭 채점 → 저장소별 판정. 대형 저장소는 파일 샘플링·요약 계층화로 토큰 상한을 지킨다. 분석 결과는 커밋 해시 기준으로 캐시해 같은 상태를 다시 분석하지 않는다.
 9. **Project Planner**: 갭 (b)와 Repo Auditor의 "보완 후 사용" 항목을 입력받아 신규·보강 프로젝트 로드맵을 생성. 각 항목은 근거 요건, 완료 기준(검증 가능한 형태: "테스트 커버리지 X 이상", "배포 URL 동작", "평가 지표표 README 게시"), 예상 기간, 우선순위를 가진다.
 10. **Resume Tailor (M3 이후)**: (a)만 반영해 수정안 작성.
-11. **Fact Verifier**: 출력의 각 claim을 fact와 대조(claim-level entailment). 실패 claim만 표적 재작성(최대 N회, 소진 시 문장 제거 + 리포트 표시). — 내가 이전 팀 프로젝트(KV Cache Multi-Agent RAG)에서 설계한 "검증 실패 claim의 출처 Agent만 재실행" 패턴의 일반화. README에 원본 저장소 링크와 함께 명시.
+11. **Fact Verifier**: 출력의 각 claim을 fact와 대조(claim-level entailment). 실패 claim만 표적 재작성(최대 N회, 소진 시 문장 제거 + 리포트 표시). — 내가 이전 팀 프로젝트(KV Cache Multi-Agent RAG)에서 설계한 "검증 실패 claim의 출처 Agent만 재실행" 패턴의 일반화. README에는 원본 저장소 링크 없이 "이전 팀 프로젝트에서 설계한 패턴"으로만 명시한다(원본 README의 실명 노출 방지, Q21).
 12. **Policy & Safety Checker**: 블라인드 위반, 다른 회사명 혼입, 글자 수, 날짜 형식, 팀/개인 성과 혼동 + 진단문에 보호 속성(성별·나이·출신 지역·학교 서열·장애 등) 기반 판단이나 비하 표현이 섞였는지 검사.
 13. **Renderer**: 매칭 리포트, 진단 리포트, GitHub 감사 리포트, 프로젝트 로드맵, 수정 이력서(PDF/Markdown).
 
@@ -247,3 +247,4 @@ README 구성: `RIGOR — Resume Inspection with GitHub for Offer Readiness` 제
   - 범위 조정: 매칭 M4 이후, Resume Tailor M3 이후, 환경 2개, 카나리·fake door·공개 대시보드 제외, 운영 리뷰 격주, 보정은 표본 확보 후 (Q3)
   - 비용 최소화 원칙 (Q5)
   - 이력서 HWP/HWPX·스캔 PDF 지원 (ADR-0011, Q11), 진단 어조 직설 고정 (ADR-0012, Q16), 서비스 대상 한국 거주자 (Q13)
+  - Fact Verifier 출처 표기: 링크 없이 서술 (Q21)
