@@ -44,4 +44,11 @@ src = ["app", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # 한국어 문자열·주석의 전각 문자 경고 제외
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # 한국어 문자열·주석의 전각 문자 경고
+    "B008",  # typer.Option을 기본값으로 쓰는 것은 Typer의 표준 사용법
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 합성 케이스 정의는 한글 문장이 많은 데이터 파일이라 줄 길이를 강제하지 않는다
+"app/rigor/synth/cases.py" = ["E501"]
