@@ -108,6 +108,7 @@ class RepoWorkspace:
         self.redact_terms = [t for t in redact_terms if t]
         self._files = {p: self._redact(t) for p, t in snap.files.items()}
         self.opened: set[str] = set()  # read_file로 실제 연 파일 (인용 검증 기준)
+        self.grepped_all = False  # 읽을 수 있는 파일 전체를 grep한 적이 있는가 (not_found 기준)
         self._paths = set(snap.paths)
 
     def _redact(self, text: str) -> str:
@@ -170,6 +171,8 @@ class RepoWorkspace:
         hits: list[str] = []
         searched = [p for p in self.readable_paths if p.startswith(prefix) and p in self._files]
         total = sum(1 for p in self.readable_paths if p.startswith(prefix))
+        if not prefix and len(searched) == total:
+            self.grepped_all = True
         for path in searched:
             for i, line in enumerate(self._files[path].splitlines(), start=1):
                 if needle in line.casefold():

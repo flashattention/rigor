@@ -77,7 +77,7 @@ def check_submission(ws: RepoWorkspace, arguments: dict[str, Any]) -> CheckedVer
     result, reason, downgraded = sub.result, sub.reason, False
     if result in (ClaimResult.SUPPORTED, ClaimResult.CONTRADICTED) and not verified:
         result, reason, downgraded = ClaimResult.UNVERIFIABLE, "인용을 파일에서 확인하지 못함", True
-    elif result is ClaimResult.NOT_FOUND and not ws.searched_everything:
+    elif result is ClaimResult.NOT_FOUND and not ws.grepped_all:
         result, reason, downgraded = ClaimResult.UNVERIFIABLE, "저장소를 다 살피지 못함", True
     return CheckedVerdict(result, reason, verified, rejected, downgraded)
 

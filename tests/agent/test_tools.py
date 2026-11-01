@@ -142,9 +142,18 @@ def test_supported_without_citation_and_malformed_submission_are_downgraded():
     assert check_submission(w, {"result": "합격"}).result is ClaimResult.UNVERIFIABLE
 
 
-def test_not_found_needs_full_coverage():
-    assert check_submission(ws(), {"result": "not_found"}).result is ClaimResult.NOT_FOUND
+def test_not_found_needs_a_search_of_every_file():
+    w = ws()
+    assert check_submission(w, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
+    w.grep("redis")
+    assert check_submission(w, {"result": "not_found"}).result is ClaimResult.NOT_FOUND
+
+    scoped = ws()
+    scoped.grep("redis", prefix="src/")
+    assert check_submission(scoped, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
+
     partial = ws(paths=[*FILES, "unread.py"])
+    partial.grep("redis")
     assert check_submission(partial, {"result": "not_found"}).result is ClaimResult.UNVERIFIABLE
 
 
