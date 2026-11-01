@@ -23,10 +23,15 @@ _MILITARY = re.compile(
 )
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _PHONE = re.compile(r"(\+82[\s-]?)?0?1[016789][\s.-]?\d{3,4}[\s.-]?\d{4}")
+# 경로(/tree/main)와 바로 붙은 한글 조사가 있어도 계정명이 남지 않아야 한다
 _GITHUB_REPO = re.compile(
-    r"(?:https?://)?github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?=[\s)\]>,]|\.git|$)"
+    r"(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+)"
+    r"(?:[/?#][^\s)\]>,가-힣]*)?",
+    re.IGNORECASE,
 )
-_GITHUB_PROFILE = re.compile(r"(?:https?://)?github\.com/([A-Za-z0-9-]+)(?![/A-Za-z0-9-])")
+_GITHUB_PROFILE = re.compile(
+    r"(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9-]+)/?(?![A-Za-z0-9-])", re.IGNORECASE
+)
 _SCHOOL = re.compile(
     r"[가-힣A-Za-z]+(?:대학교|대학원|대학|고등학교)"
     r"|[A-Z][A-Za-z.&\s]{1,40}?(?:University|College|Institute of Technology)"
@@ -102,10 +107,13 @@ def mask_pii(
         return token
 
     def repo_sub(m: re.Match) -> str:
-        url = f"https://github.com/{m.group(1)}/{m.group(2)}"
+        repo = m.group(2).rstrip(".").removesuffix(".git")
+        url = f"https://github.com/{m.group(1)}/{repo}"
         token = token_for("REPO", url)
         result.repo_urls[token] = url
-        return token
+        # URL 끝의 문장 부호는 본문이므로 남긴다
+        full = m.group(0)
+        return token + full[len(full.rstrip(".;:")) :]
 
     masked = _GITHUB_REPO.sub(repo_sub, masked)
     masked = _GITHUB_PROFILE.sub(lambda m: token_for("GITHUB", m.group(0)), masked)

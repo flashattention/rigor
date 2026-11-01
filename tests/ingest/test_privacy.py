@@ -29,6 +29,33 @@ def test_sensitive_lines_are_dropped_and_pii_is_tokenized():
     assert "[GITHUB_1]" in m.text
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("https://github.com/synth-user/agent/tree/main", "[REPO_1]"),
+        ("https://github.com/synth-user/agent/blob/main/a.py#L3 참고", "[REPO_1] 참고"),
+        ("github.com/synth-user/agent에서 구현", "[REPO_1]에서 구현"),
+        ("https://www.GitHub.com/synth-user/agent.git", "[REPO_1]"),
+        ("저장소는 github.com/synth-user/agent.", "저장소는 [REPO_1]."),
+    ],
+)
+def test_repo_urls_with_paths_or_korean_suffixes_are_masked(text, expected):
+    m = mask_pii(text)
+    assert m.text == expected
+    assert m.repo_urls == {"[REPO_1]": "https://github.com/synth-user/agent"}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("github.com/synth-user/", "[GITHUB_1]"),
+        ("github.com/synth-user에서", "[GITHUB_1]에서"),
+    ],
+)
+def test_profile_urls_with_trailing_text_are_masked(text, expected):
+    assert mask_pii(text).text == expected
+
+
 def test_engineering_use_of_jangae_is_kept():
     # "장애"는 장애 여부가 아니라 서비스 장애(incident)일 수 있다
     assert "서비스 장애 대응 자동화" in mask_pii(RESUME).text
