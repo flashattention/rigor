@@ -24,6 +24,7 @@
 | [0016](0016-defer-matching.md) | 매칭 기능을 M4 이후로 이연 | 대체됨 (→ 0019) |
 | [0017](0017-core-graph-resume-repo-reconciliation.md) | 핵심 흐름 그래프 재구성 — 이력서–저장소 정합 우선 | 채택됨 (개정 2026-11-01) |
 | [0018](0018-tool-layer-mcp-consult-agent.md) | 도구 계층(MCP)·진단 상담 에이전트·Postgres 앞당김 | 채택됨 |
-| [0019](0019-two-entry-modes.md) | 두 진입 경로: 매칭 / 공고 지정 진단 | 채택됨 |
+| [0019](0019-two-entry-modes.md) | 두 진입 경로: 매칭 / 공고 지정 진단 | 채택됨 (개정 2026-11-01) |
+| [0020](0020-agent-first-claim-verification.md) | 저장소 검증 에이전트를 중심으로 재설계 | 채택됨 |
 
 후보(아직 작성 안 함): 프론트엔드(M3).
