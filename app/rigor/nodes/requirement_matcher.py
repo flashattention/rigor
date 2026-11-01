@@ -18,7 +18,7 @@ from rigor.prompts import data_block, load_prompt
 from rigor.schemas.common import Citation, DraftModel
 from rigor.schemas.diagnosis import RequirementVerdict, VerdictStatus
 from rigor.schemas.job import JobPosting, KnockoutType, LegalCheck, RequirementKind
-from rigor.schemas.profile import Degree, FactCategory, Profile
+from rigor.schemas.profile import Degree, EducationStatus, Fact, FactCategory, Profile
 from rigor.schemas.repo import ClaimResult, RepoAudit, RepoEvidence
 
 TASK = "requirement_verdict"
@@ -29,11 +29,12 @@ _DEGREE_RANK = {
     Degree.MASTER: 3,
     Degree.PHD: 4,
 }
-# 위에서부터 먼저 맞는 항목을 요구 학위로 본다.
+# 여러 학위가 나오면 가장 낮은 것이 요구 학위다 ("학사 이상 (석사 우대)", "학사 또는 석사")
 _REQUIRED_DEGREE = [
-    (re.compile(r"박사|ph\.?d|doctor", re.I), Degree.PHD),
+    (re.compile(r"전문학사|초대졸|2년제|associate", re.I), Degree.ASSOCIATE),
+    (re.compile(r"(?<!전문)학사|bachelor|(?<!초)대졸|4년제", re.I), Degree.BACHELOR),
     (re.compile(r"석사|master|m\.s\.", re.I), Degree.MASTER),
-    (re.compile(r"학사|bachelor|대졸|4년제", re.I), Degree.BACHELOR),
+    (re.compile(r"박사|ph\.?d|doctor", re.I), Degree.PHD),
 ]
 
 
@@ -136,10 +137,18 @@ def _kind(ref: str) -> str | None:
     return None
 
 
+def _holds(fact: Fact, need: Degree) -> bool:
+    edu = fact.education_normalized
+    return (
+        edu.status is EducationStatus.GRADUATED and _DEGREE_RANK[edu.degree] >= _DEGREE_RANK[need]
+    )
+
+
 def _degree_verdict(req_text: str, profile: Profile) -> RequirementVerdict | None:
-    """요구 학위와 확인된 최고 학위를 비교한다. requirement_id는 호출자가 채운다.
+    """요구 학위와 졸업한 최고 학위를 비교한다. requirement_id는 호출자가 채운다.
 
     요구 학위를 못 찾거나 학력 fact가 없으면 None이고, 이때는 LLM 판정을 쓴다.
+    재학·졸업 예정으로만 요건을 채우면 공고 문구에 달렸으므로 역시 None이다.
     """
     need = next((d for pattern, d in _REQUIRED_DEGREE if pattern.search(req_text)), None)
     edu = [
@@ -149,13 +158,20 @@ def _degree_verdict(req_text: str, profile: Profile) -> RequirementVerdict | Non
     ]
     if need is None or not edu:
         return None
-    best = max(edu, key=lambda f: _DEGREE_RANK[f.education_normalized.degree])
-    ok = _DEGREE_RANK[best.education_normalized.degree] >= _DEGREE_RANK[need]
+    holding = [f for f in edu if _holds(f, need)]
+    in_progress = (EducationStatus.ENROLLED, EducationStatus.EXPECTED)
+    if not holding and any(
+        f.education_normalized.status in in_progress
+        and _DEGREE_RANK[f.education_normalized.degree] >= _DEGREE_RANK[need]
+        for f in edu
+    ):
+        return None
+    best = max(holding or edu, key=lambda f: _DEGREE_RANK[f.education_normalized.degree])
     return RequirementVerdict(
         requirement_id="",
-        status=VerdictStatus.MET if ok else VerdictStatus.UNMET,
+        status=VerdictStatus.MET if holding else VerdictStatus.UNMET,
         citations=[Citation(kind="fact", ref_id=best.id)],
-        rationale=f"확인된 최종 학위 {best.education_normalized.degree.value}, 요건 {need.value} 이상 (규칙 판정)",
+        rationale=f"확인된 학위 {best.education_normalized.degree.value}({best.education_normalized.status.value}), 요건 {need.value} 이상 (규칙 판정)",
     )
 
 
