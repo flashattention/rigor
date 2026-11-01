@@ -134,6 +134,10 @@
 | evidence | Citation[] | supported/contradicted면 필수 |
 | action | str | "이력서 수정 필요: ..." / "근거 링크 추가" |
 
+### 4.4 Improvement
+`id, title, description, done_criteria: DoneCriterion[], effort_days: float, impact: enum low|med|high, citations: Citation[] (min 1, 공고 요건 포함 권장)`
+`DoneCriterion = {signal_path, op, value}` — 재감사의 결정론 신호로 자동 확인 가능한 형태 (예: `signals.tests.exists == true`, `signals.readme.sections contains "results"`). NSM(ADR-0007) 측정에 쓰인다.
+
 ### 4.5 Claim (원자 주장)
 `id, fact_id, type: enum tech|feature|metric|role|period|link, text, question: str (검증 가능한 질문으로 바꾼 것, 예: "의존성·import에 langgraph가 있는가"), repo_id?`
 
@@ -152,9 +156,6 @@
 ### 4.9 InterviewCard (면접 준비 카드)
 `claim_id, likely_questions: str[], evidence_locations: Citation[] (파일·줄·커밋), talking_points: str[], caution?: str` — `talking_points`도 Fact Verifier 대상이다.
 
-### 4.4 Improvement
-`id, title, description, done_criteria: DoneCriterion[], effort_days: float, impact: enum low|med|high, citations: Citation[] (min 1, 공고 요건 포함 권장)`
-`DoneCriterion = {signal_path, op, value}` — 재감사의 결정론 신호로 자동 확인 가능한 형태 (예: `signals.tests.exists == true`, `signals.readme.sections contains "results"`). NSM(ADR-0007) 측정에 쓰인다.
 
 ---
 
